@@ -12,8 +12,34 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Budget Tracker">
 
-    <!-- Embedded PWA Web Manifest -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkJ1ZGdldCBUcmFja2VyIiwKICAic2hvcnRfbmFtZSI6ICJCdWRnZXQiLAogICJzdGFydF91cmwiOiAiLi8iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwMjA2MTciLAogICJ0aGVtZV9jb2xvciI6ICIjMDIwNjE3IiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLDxzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgMTAwIDEwMCc+PHJlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIHJ4PScyMCcgZmlsbD0nIzAyMDYxNycvPjx0ZXh0IHg9JzUwJyB5PSc2NScgZm9udC1zaXplPSc1MCcgZm9udC13ZWlnaHQ9J2JvbGQnIGZpbGw9JyMxMGI5ODEnIHRleHQtYW5jaG9yPSdtaWRkbGUnPkMkPC90ZXh0Pjwvc3ZnPiIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIKICAgIH0KICBdCn0=">
+    <!-- Clean Inline PWA Web Manifest -->
+    <script>
+        (function() {
+            const manifest = {
+                "name": "Budget Tracker",
+                "short_name": "Budget",
+                "start_url": window.location.pathname,
+                "display": "standalone",
+                "background_color": "#020617",
+                "theme_color": "#020617",
+                "icons": [
+                    {
+                        "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23020617'/><text x='50' y='65' font-size='50' font-weight='bold' fill='%2310b981' text-anchor='middle'>C$</text></svg>",
+                        "sizes": "512x512",
+                        "type": "image/svg+xml",
+                        "purpose": "any maskable"
+                    }
+                ]
+            };
+            const stringManifest = JSON.stringify(manifest);
+            const blob = new Blob([stringManifest], {type: 'application/json'});
+            const manifestUrl = URL.createObjectURL(blob);
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = manifestUrl;
+            document.head.appendChild(link);
+        })();
+    </script>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -243,7 +269,7 @@
                 <div>
                     <label class="block text-slate-400 mb-1 font-medium">Date & Time</label>
                     <input type="datetime-local" x-model="form.date" required
-                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500">
                 </div>
 
                 <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/10">
@@ -278,233 +304,3 @@
     <script>
         function expenseApp() {
             return {
-                activeTab: 'overview',
-                showModal: false,
-                searchQuery: '',
-                toast: { show: false, message: '' },
-                
-                // Set your GAS Web App URL here
-                gasUrl: '',
-
-                form: {
-                    description: '',
-                    amount: '',
-                    date: new Date().toISOString().slice(0, 16)
-                },
-
-                expenses: [
-                    { id: 1, description: 'Supermarket Grocery', amount: 85.80, date: '2026-11-02T14:30' },
-                    { id: 2, description: 'Tim Hortons Coffee', amount: 4.85, date: '2026-11-01T08:15' },
-                    { id: 3, description: 'Compass Pass Refill', amount: 120.00, date: '2026-10-15T09:00' },
-                    { id: 4, description: 'Superstore Supplies', amount: 145.30, date: '2026-10-05T18:20' }
-                ],
-
-                init() {
-                    const saved = localStorage.getItem('budget_tracker_expenses');
-                    if (saved) {
-                        try { this.expenses = JSON.parse(saved); } catch (e) {}
-                    }
-                    this.registerServiceWorker();
-
-                    // Automatic sync from GAS on launch
-                    this.syncFromSheet();
-                },
-
-                registerServiceWorker() {
-                    if ('serviceWorker' in navigator) {
-                        const swCode = `
-                            self.addEventListener('install', e => self.skipWaiting());
-                            self.addEventListener('activate', e => self.clients.claim());
-                            self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
-                        `;
-                        const blob = new Blob([swCode], { type: 'text/javascript' });
-                        const url = URL.createObjectURL(blob);
-                        navigator.serviceWorker.register(url).catch(() => {});
-                    }
-                },
-
-                async syncFromSheet() {
-                    if (!this.gasUrl) return;
-                    try {
-                        const res = await fetch(this.gasUrl);
-                        if (res.ok) {
-                            const fetchedExpenses = await res.json();
-                            if (Array.isArray(fetchedExpenses) && fetchedExpenses.length > 0) {
-                                this.expenses = fetchedExpenses;
-                                this.saveToStorage();
-                                this.showToast('Synced with Sheet!');
-                            }
-                        }
-                    } catch (err) {
-                        console.log('Sync skipped or offline mode.');
-                    }
-                },
-
-                saveToStorage() {
-                    localStorage.setItem('budget_tracker_expenses', JSON.stringify(this.expenses));
-                },
-
-                showToast(msg) {
-                    this.toast.message = msg;
-                    this.toast.show = true;
-                    setTimeout(() => { this.toast.show = false; }, 2500);
-                },
-
-                openAddModal() {
-                    this.form = {
-                        description: '',
-                        amount: '',
-                        date: new Date().toISOString().slice(0, 16)
-                    };
-                    this.showModal = true;
-                },
-
-                closeAddModal() {
-                    this.showModal = false;
-                },
-
-                saveExpense() {
-                    if (!this.form.description || !this.form.amount) return;
-                    
-                    const newEntry = {
-                        id: Date.now(),
-                        description: this.form.description,
-                        amount: parseFloat(this.form.amount),
-                        date: this.form.date
-                    };
-
-                    this.expenses.unshift(newEntry);
-                    this.saveToStorage();
-                    this.closeAddModal();
-                    this.showToast('Expense recorded successfully!');
-                },
-
-                deleteExpense(id) {
-                    this.expenses = this.expenses.filter(item => item.id !== id);
-                    this.saveToStorage();
-                    this.showToast('Transaction removed');
-                },
-
-                seedDemoData() {
-                    this.expenses = [
-                        { id: 101, description: 'Supermarket Grocery', amount: 64.20, date: '2026-11-02T16:00' },
-                        { id: 102, description: 'Gas Station Fuel', amount: 55.00, date: '2026-11-01T12:30' },
-                        { id: 103, description: 'Online Subscription', amount: 14.99, date: '2026-10-30T21:00' },
-                        { id: 104, description: 'Coffee & Snack', amount: 12.50, date: '2026-09-15T14:00' }
-                    ];
-                    this.saveToStorage();
-                    this.showToast('Sample data loaded!');
-                },
-
-                clearAllData() {
-                    this.expenses = [];
-                    this.saveToStorage();
-                    this.showToast('All transactions cleared');
-                },
-
-                exportCSV() {
-                    if (this.expenses.length === 0) {
-                        this.showToast('No data to export!');
-                        return;
-                    }
-                    let csv = '\uFEFFDate,Description,Amount(CAD)\n';
-                    this.expenses.forEach(e => {
-                        csv += `"${e.date}","${e.description.replace(/"/g, '""')}",${e.amount}\n`;
-                    });
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', `CAD_Expenses_Export_${new Date().toISOString().slice(0, 10)}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    this.showToast('CSV downloaded successfully!');
-                },
-
-                formatCAD(val) {
-                    return 'CA$' + Number(val).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                },
-
-                formatDate(dateStr) {
-                    if (!dateStr) return '';
-                    const d = new Date(dateStr);
-                    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                },
-
-                get currentMonthLabel() {
-                    const now = new Date();
-                    return now.toLocaleDateString('en-CA', { year: 'numeric', month: 'short' });
-                },
-
-                get currentMonthTotalCAD() {
-                    const now = new Date();
-                    const currentYearMonth = now.toISOString().slice(0, 7);
-                    return this.expenses
-                        .filter(item => item.date && item.date.startsWith(currentYearMonth))
-                        .reduce((sum, item) => sum + Number(item.amount), 0);
-                },
-
-                get currentMonthCADCount() {
-                    const now = new Date();
-                    const currentYearMonth = now.toISOString().slice(0, 7);
-                    return this.expenses.filter(item => item.date && item.date.startsWith(currentYearMonth)).length;
-                },
-
-                get monthlyStats() {
-                    const monthlyTotals = {};
-                    this.expenses.forEach(e => {
-                        if (!e.date) return;
-                        const ym = e.date.substring(0, 7);
-                        monthlyTotals[ym] = (monthlyTotals[ym] || 0) + Number(e.amount);
-                    });
-
-                    const sortedYM = Object.keys(monthlyTotals).sort();
-                    if (sortedYM.length === 0) {
-                        const nowYM = new Date().toISOString().slice(0, 7);
-                        return [{ yearMonth: nowYM, monthLabel: 'Current', total: 0, heightPercent: 0 }];
-                    }
-
-                    const totalsArray = sortedYM.map(ym => monthlyTotals[ym]);
-
-                    // Trimmed mean calculation for bar scaling baseline
-                    let scaleTarget = 1;
-                    if (totalsArray.length > 2) {
-                        const sortedTotals = [...totalsArray].sort((a, b) => a - b);
-                        const trimmed = sortedTotals.slice(1, -1);
-                        const avg = trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
-                        scaleTarget = avg || 1;
-                    } else {
-                        const avg = totalsArray.reduce((sum, val) => sum + val, 0) / totalsArray.length;
-                        scaleTarget = avg || 1;
-                    }
-
-                    return sortedYM.map(ym => {
-                        const dateParts = ym.split('-');
-                        const dateObj = new Date(dateParts[0], dateParts[1] - 1, 1);
-                        const monthLabel = dateObj.toLocaleDateString('en-US', { month: 'short' });
-                        const total = monthlyTotals[ym];
-                        return {
-                            yearMonth: ym,
-                            monthLabel: `${monthLabel} '${ym.slice(2, 4)}`,
-                            total: total,
-                            heightPercent: (total / scaleTarget) * 100
-                        };
-                    });
-                },
-
-                get filteredExpenses() {
-                    return this.expenses.filter(item => {
-                        if (this.searchQuery && !item.description.toLowerCase().includes(this.searchQuery.toLowerCase())) return false;
-                        return true;
-                    });
-                },
-
-                get recentExpenses() {
-                    return this.expenses.slice(0, 5);
-                }
-            }
-        }
-    </script>
-</body>
-</html>
