@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>FALSE DILEMMA</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { --bg-color:#050505; --card-bg:rgba(20,20,20,0.95); --neon-red:#ff1a1a; --accent-red:#8e0000; --accent-blue:#45aaf2; --accent-gold:#f1c40f; --accent-purple:#a55eea; --accent-orange:#e67e22; --text-color:#e0e0e0; }
+        * { touch-action:manipulation; box-sizing:border-box; outline:none; }
+        
+        /* body背景を強制的に黒に固定して隙間を解消 */
+        body, html { 
+            margin:0; padding:0; width:100%; height:100%; overflow:hidden; 
+            background-color:#000000; 
+            font-family:'Noto Sans JP', sans-serif; color:var(--text-color); 
+            transition: background 1.5s ease; 
+        }
+        
+        body.citizen-win-bg { background: radial-gradient(circle at center, #0a1f3d 0%, #000000 100%); }
+        
+        /* ゲームのUI配置を維持したまま背景グラデーションを適用 */
+        .viewport { 
+            width:100%; height:100dvh; 
+            display:flex; justify-content:center; align-items:center; 
+            position:relative; overflow:hidden; 
+            background:radial-gradient(circle at center, #1a0505 0%, #050505 100%);
+        }
+        
+        .screen { position:absolute; width:94%; max-width:440px; opacity:0; visibility:hidden; transform:translateY(15px); transition:0.3s ease; text-align:center; z-index:1; overflow-y: auto; max-height: 98dvh; padding: 10px; }
+        .screen.active { opacity:1; visibility:visible; transform:translateY(0); z-index:10; }
+    
+    /* 言語選択セレクター */
+        .lang-selector { position: absolute; top: 15px; left: 15px; z-index: 9999; background: rgba(0,0,0,0.7); border: 1px solid #555; color: #fff; padding: 6px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; }
+        
+        h1 { font-family:'Cinzel', serif; font-size:1.8rem; letter-spacing:4px; color:var(--neon-red); text-shadow:0 0 15px rgba(255, 26, 26, 0.6); margin: 0 0 10px; }
+        .card { background:var(--card-bg); border:1px solid #301010; border-radius:20px; padding:15px; box-shadow: 0 0 30px rgba(0,0,0,1); position:relative; }
+        .giant-selector { display: flex; justify-content: center; align-items: center; gap: 15px; margin: 20px 0; }
+        .btn-giant { width: 75px; height: 75px; border-radius: 50%; font-size: 2.2rem; background: #222; color: #fff; border: 3px solid var(--accent-gold); cursor: pointer; }
+        .btn-giant:active { background: #444; }
+        .display-giant { font-size: 4rem; font-family: 'Cinzel', serif; color: var(--accent-gold); min-width: 60px; text-shadow: 0 0 20px var(--accent-gold); }
+        .role-step-container { margin: 12px 0; border-bottom: 1px solid #222; padding-bottom: 12px; }
+        .role-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 5px; font-size: 1.1rem; }
+        .stepper { display: flex; justify-content: center; align-items: center; gap: 35px; margin-top: 5px; }
+        .btn-step { width: 60px; height: 60px; border-radius: 15px; border: 1px solid #666; background: #1a1a1a; color: #fff; font-size: 2rem; cursor: pointer; }
+        .btn-step:active { background: #333; }
+        .val-step { font-size: 2.5rem; font-family: 'Cinzel', serif; min-width: 50px; color: var(--accent-blue); }
+        .villager-banner { background: rgba(255,255,255,0.08); border: 2px dashed #666; border-radius: 15px; padding: 15px; margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .v-label { font-size: 1.1rem; color: #fff; }
+        .v-count { font-size: 2.5rem; font-family: 'Cinzel', serif; color: #fff; }
+
+        input, textarea { width:100%; background:#111; border:1px solid #442222; color:white; padding:12px; margin-bottom:8px; border-radius:8px; font-size:16px; transition: 0.3s; }
+        textarea[readonly] { background: #222; color: #888; border-color: #333; }
+        button { width:100%; padding:14px; border-radius:10px; border:none; cursor:pointer; font-weight:bold; margin-top:8px; transition:0.2s; font-size:1rem; }
+        button:disabled { background:#222 !important; color:#555 !important; cursor:not-allowed; opacity:1; }
+        .btn-primary { background:var(--accent-red); color:#fff; }
+        .btn-outline { background:transparent; border: 1px solid #553333; color: #aaa; }
+        .btn-flex { display:flex; gap:10px; } .btn-flex button { flex:1; }
+        
+        .color-人狼 { color: var(--neon-red) !important; text-shadow: 0 0 10px var(--neon-red); }
+        .color-狂人 { color: var(--accent-orange) !important; text-shadow: 0 0 10px var(--accent-orange); }
+        .color-占い師 { color: var(--accent-purple) !important; text-shadow: 0 0 10px var(--accent-purple); }
+        .color-囚人 { color: var(--accent-blue) !important; text-shadow: 0 0 10px var(--accent-blue); }
+        .color-富豪 { color: var(--accent-gold) !important; text-shadow: 0 0 10px var(--accent-gold); }
+        .color-村人 { color: #fff !important; }
+        .color-市民勝利 { color: var(--accent-gold) !important; text-shadow: 0 0 20px var(--accent-gold); font-size: 2.2rem; }
+        
+        .timer-display { font-size:4.5rem; font-family:'Cinzel', serif; margin:10px 0; color:#fff; }
+        #status-bar { position:fixed; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.9); font-size:11px; padding:5px; color:#666; text-align:center; z-index:999; border-top:1px solid #222; }
+        .silence-btn { display: block; margin-bottom: 8px; font-size: 1.1rem; }
+        .silence-btn.active { background: var(--accent-red); color: #fff; border-color: var(--accent-red); }
+    </style>
+</head>
+<body>
+
+<!-- 言語切り替えUI -->
+<select id="lang-select" class="lang-selector" onchange="changeLang(this.value)">
+    <option value="ja">🌐 日本語</option>
+    <option value="en">🌐 English</option>
+    <option value="fr">🌐 Français</option>
+    <option value="zh">🌐 中文</option>
+</select>
+
+<div class="viewport">
+    <div id="screen-lobby" class="screen active">
+        <h1 data-i18n="app_title">FALSE DILEMMA</h1>
+        <div class="card">
+            <div id="initial-setup">
+                <input type="text" id="user-name" placeholder="プレイヤー名">
+                <button class="btn-primary" id="host-init-btn" onclick="initHost()" data-i18n="btn_create_room">部屋を作る</button>
+                <button class="btn-outline" onclick="startOfflineSetup()" data-i18n="btn_offline">対面でプレイ</button>
+                <div style="margin:15px 0; border-top:1px solid #331111;"></div>
+                <input type="text" id="room-id-input" placeholder="Room ID (4桁)">
+                <button id="join-init-btn" class="btn-outline" onclick="initGuest()" data-i18n="btn_join_room">部屋に参加</button>
+            </div>
+            <div id="lobby-waiting" style="display:none;">
+                <p id="display-id" style="color:var(--neon-red); font-weight:bold; font-size: 1.5rem; letter-spacing: 2px;"></p>
+                <p style="font-size: 0.8rem; color: #888;" data-i18n="lbl_tell_id">このIDを仲間に教えてください</p>
+                <div id="member-list" style="text-align:left; font-size:0.9rem; margin:15px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px;"></div>
+                <button id="host-go-to-config" class="btn-primary" style="display:none;" onclick="showRoleConfig()" data-i18n="btn_go_config">役職設定へ進む</button>
+                <p id="guest-waiting-msg" style="display:none; font-size:0.8rem; color:var(--accent-gold);" data-i18n="msg_waiting_host">ホストの設定を待っています...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-offline-setup" class="screen">
+        <h1 data-i18n="title_player_count">Player Count</h1>
+        <div class="card" style="border: 2px solid var(--accent-gold);">
+            <p data-i18n="lbl_how_many">何人で儀式を行いますか？</p>
+            <div class="giant-selector">
+                <button class="btn-giant" onclick="adjustTotalPlayers(-1)">-</button>
+                <div class="display-giant" id="giant-count-display">4</div>
+                <button class="btn-giant" onclick="adjustTotalPlayers(1)">+</button>
+            </div>
+            <div id="off-name-container" style="max-height:150px; overflow-y:auto; margin-bottom:10px; border-top:1px solid #333; padding-top:10px;"></div>
+            <div class="btn-flex">
+                <button class="btn-outline" onclick="history.back()" data-i18n="btn_back">戻る</button>
+                <button class="btn-primary" onclick="showRoleConfig()" data-i18n="btn_next_config">次へ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-role-config" class="screen">
+        <h1 data-i18n="title_role_settings">Role Settings</h1>
+        <div class="card">
+            <div class="role-step-container"><div class="role-header"><span class="color-人狼" data-i18n="role_ww">人狼</span></div>
+                <div class="stepper"><button class="btn-step" onclick="changeRoleCount('ww', -1)">-</button><span class="val-step" id="val-ww">1</span><button class="btn-step" onclick="changeRoleCount('ww', 1)">+</button></div></div>
+            <div class="role-step-container"><div class="role-header"><span class="color-狂人" data-i18n="role_mad">狂人</span></div>
+                <div class="stepper"><button class="btn-step" onclick="changeRoleCount('mad', -1)">-</button><span class="val-step" id="val-mad">0</span><button class="btn-step" onclick="changeRoleCount('mad', 1)">+</button></div></div>
+            <div class="role-step-container"><div class="role-header"><span class="color-占い師" data-i18n="role_seer">占い師</span></div>
+                <div class="stepper"><button class="btn-step" onclick="changeRoleCount('seer', -1)">-</button><span class="val-step" id="val-seer">1</span><button class="btn-step" onclick="changeRoleCount('seer', 1)">+</button></div></div>
+            <div class="role-step-container"><div class="role-header"><span class="color-囚人" data-i18n="role_pris">囚人</span></div>
+                <div class="stepper"><button class="btn-step" onclick="changeRoleCount('prisoner', -1)">-</button><span class="val-step" id="val-prisoner">1</span><button class="btn-step" onclick="changeRoleCount('prisoner', 1)">+</button></div></div>
+            <div class="role-step-container"><div class="role-header"><span class="color-富豪" data-i18n="role_bill">富豪</span></div>
+                <div class="stepper"><button class="btn-step" onclick="changeRoleCount('billionaire', -1)">-</button><span class="val-step" id="val-billionaire">1</span><button class="btn-step" onclick="changeRoleCount('billionaire', 1)">+</button></div></div>
+            <div class="villager-banner"><span class="v-label" data-i18n="role_vil">村人 (残り)</span><div class="v-count" id="display-villager-count">0</div></div>
+            <textarea id="global-shackles" rows="2" style="margin-top:15px;"></textarea>
+            <div class="btn-flex" id="host-config-btns">
+                <button class="btn-outline" onclick="history.back()" data-i18n="btn_back">戻る</button>
+                <button class="btn-primary" id="final-start-btn" onclick="validateAndStart()" data-i18n="btn_go_reveal">役職確認へ</button>
+            </div>
+            <p id="guest-config-wait-msg" style="display:none; font-size:0.8rem; color:var(--accent-gold); margin-top:15px; font-weight:bold;" data-i18n="msg_host_editing">ホストが設定を編集中です...</p>
+        </div>
+    </div>
+
+    <div id="screen-handover" class="screen">
+        <h1 id="handover-phase-title"></h1>
+        <div class="card">
+            <h2 id="handover-name" style="font-size:2.5rem; color:var(--accent-blue);"></h2>
+            <p id="handover-msg-text" style="font-size: 1.1rem; margin: 15px 0;">さんにスマホを回してください。</p>
+            <button id="handover-btn" class="btn-primary" style="margin-top:20px; padding: 20px;" onclick="handoverComplete()" data-i18n="btn_start_action">行動を始める</button>
+        </div>
+    </div>
+
+    <div id="screen-confirm" class="screen">
+        <div class="card">
+            <h2 id="confirm-name"></h2>
+            <p id="confirm-instruction" style="color:#888;"></p>
+            <div class="btn-flex" style="margin-top:20px;">
+                <button class="btn-primary" style="padding: 20px;" id="confirm-yes-btn" data-i18n="btn_yes_me">はい、私です</button>
+                <button id="confirm-no-btn" class="btn-outline" onclick="alert('OK')" data-i18n="btn_no_me">いいえ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-reveal" class="screen">
+        <div class="card">
+            <h1 id="my-role-name"></h1><div id="my-role-icon" style="font-size:5rem;"></div>
+            <div id="reveal-info-box" style="margin-top:10px; font-size:1.2rem; border-top:1px solid #333; padding-top:15px; font-weight:bold;"></div>
+            <div id="ww-choice" style="display:none; margin-top:20px;">
+                <div class="btn-flex"><button id="target-A" class="btn-outline" onclick="selectTarget('A')">A</button><button id="target-B" class="btn-outline" onclick="selectTarget('B')">B</button></div>
+            </div>
+            <button id="reveal-done-btn" class="btn-primary" style="margin-top:30px;" onclick="playerReady()" data-i18n="btn_done_check">確認完了</button>
+            <p id="ready-wait-msg" style="display:none; color:#888; font-size:0.8rem; margin-top:20px;" data-i18n="msg_wait_others">待機中...</p>
+        </div>
+    </div>
+
+    <div id="screen-discussion" class="screen">
+        <h1 data-i18n="title_disc1">DISCUSSION (1日目)</h1>
+        <div class="card">
+            <div class="timer-display" id="timer-display1">05:00</div>
+            <div class="btn-flex"><button class="btn-outline" onclick="adjustTime(60)">+1:00</button><button class="btn-outline" onclick="adjustTime(-60)">-1:00</button></div>
+            <div id="special-info" style="display:none; margin:10px 0; padding:12px; border:1px dashed #442222; border-radius:10px; font-size:0.9rem;"></div>
+            <div id="host-controls" style="display:none; margin-top:20px;">
+                <button id="timer-btn" class="btn-primary" onclick="toggleTimer()" data-i18n="btn_pause">一時停止</button>
+                <button class="btn-outline" onclick="hostGoToNight()" data-i18n="btn_go_night">1日目の夜へ進む</button>
+            </div>
+            <div id="off-controls" style="display:none; margin-top:20px;">
+                <button class="btn-primary" onclick="hostGoToNight()" data-i18n="btn_go_night">1日目の夜へ進む</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-night" class="screen">
+        <h1 data-i18n="title_night1">1日目の夜</h1>
+        <div class="card">
+            <div id="night-ww-action" style="display:none;">
+                <p style="color:var(--neon-red); font-weight:bold; margin-bottom:15px;" data-i18n="lbl_choose_silence">発言権を剥夺する者を選べ</p>
+                <div id="silence-target-list"></div>
+                <button id="night-ww-submit" class="btn-primary" style="display:none; margin-top:20px;" onclick="submitNightAction()" data-i18n="btn_submit">決定する</button>
+            </div>
+            <div id="night-other-action" style="display:none;">
+                <p style="font-size: 1.2rem; color:#aaa;" data-i18n="msg_night_rest">夜が更けました...<br>朝まで体を休めてください。</p>
+                <button id="night-rest-btn" class="btn-primary" style="display:none; margin-top:30px;" onclick="submitNightAction()" data-i18n="btn_rest">体を休める</button>
+            </div>
+            <p id="night-wait-msg" style="display:none; color:#888; font-size:0.8rem; margin-top:20px;" data-i18n="msg_wait_action">待機中...</p>
+        </div>
+    </div>
+
+    <div id="screen-discussion2" class="screen">
+        <h1 data-i18n="title_disc2">最終弁論</h1>
+        <div class="card">
+            <h2 style="color:var(--neon-red); margin:0;" id="silenced-msg-box"></h2>
+            <p style="font-size: 0.8rem; color: #aaa; margin-top:5px;" data-i18n="msg_silenced_rule">※剥奪されたプレイヤーは言葉を発してはいけません</p>
+            <div class="timer-display" id="timer-display2" style="font-size:5rem; color:var(--accent-gold);">00:30</div>
+            <p style="font-size: 0.8rem; color: #888;" data-i18n="msg_auto_vote">時間が来ると自動的に投票へ</p>
+            <button class="btn-outline" style="margin-top:15px;" onclick="hostGoToVote()" id="force-vote-btn" style="display:none;" data-i18n="btn_force_vote">すぐに投票へ</button>
+        </div>
+    </div>
+
+    <div id="screen-vote" class="screen">
+        <h1 id="vote-player-label">VOTING</h1>
+        <div class="card">
+            <div id="shackle-confirm-step" style="display:none; padding:15px; background:rgba(69, 170, 242, 0.1); border:1px solid var(--accent-blue); border-radius:12px; margin-bottom:15px;">
+                <p style="color:var(--accent-blue); font-weight:bold; margin-bottom:10px;" data-i18n="lbl_shackle_done">「枷」は達成できましたか？</p>
+                <div class="btn-flex">
+                    <button id="shackle-yes" class="btn-outline" onclick="setShackleStatus(true)" data-i18n="btn_yes">はい</button>
+                    <button id="shackle-no" class="btn-outline" onclick="setShackleStatus(false)" data-i18n="btn_no">いいえ</button>
+                </div>
+            </div>
+            <div id="vote-action-area">
+                <p id="vote-guide" data-i18n="lbl_choose_final">最終回答を選択してください</p>
+                <div class="btn-flex"><button id="vbtn-A" class="btn-outline" onclick="preSubmitVote('A')">A</button><button id="vbtn-B" class="btn-outline" onclick="preSubmitVote('B')">B</button></div>
+                <button id="vbtn-confirm" class="btn-primary" style="display:none; margin-top:15px;" onclick="finalSubmitVote()" data-i18n="btn_confirm_ans">この回答で決定する</button>
+            </div>
+            <p id="vote-status-text" style="margin-top:20px; font-size:0.9rem; color:#888;"></p>
+            <p id="opening-msg" style="display:none; color:var(--accent-gold); font-weight:bold;" data-i18n="msg_counting">開票中...</p>
+        </div>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h1 id="result-winner" style="font-size: 2.2rem;"></h1>
+        <div class="card" id="final-card">
+            <div class="shine-effect"></div>
+            <div id="result-text" style="font-size:1.2rem;"></div>
+            <div id="shackle-msg" style="font-weight:bold; margin:10px 0;"></div>
+            <hr style="border:0.5px solid #331111; margin:15px 0;">
+            <div id="result-roles" style="text-align:left; font-size:0.9rem; line-height:1.8;"></div>
+            <button class="btn-primary" id="reset-btn" onclick="hostBackToSetup()" data-i18n="btn_back_setup">設定へ戻る</button>
+        </div>
+    </div>
+</div>
+
+<div id="status-bar">Initialize...</div>
+
+<script>
+    // --- 翻訳辞書データ ---
+    const i18n = {
+        ja: {
+            app_title: "FALSE DILEMMA", btn_create_room: "部屋を作る", btn_offline: "対面でプレイ", btn_join_room: "部屋に参加", lbl_tell_id: "このIDを仲間に教えてください", btn_go_config: "役職設定へ進む", msg_waiting_host: "ホストの設定を待っています...",
+            title_player_count: "Player Count", lbl_how_many: "何人で儀式を行いますか？", btn_back: "戻る", btn_next_config: "次へ",
+            title_role_settings: "Role Settings", role_ww: "人狼", role_mad: "狂人", role_seer: "占い師", role_pris: "囚人", role_bill: "富豪", role_vil: "村人 (残り)", btn_go_reveal: "役職確認へ", msg_host_editing: "ホストが設定を編集中です...",
+            btn_start_action: "行動を始める", btn_yes_me: "はい、私です", btn_no_me: "いいえ", btn_done_check: "確認完了", msg_wait_others: "他の者の準備を待っています...",
+            title_disc1: "DISCUSSION (1日目)", btn_pause: "一時停止", btn_pause2: "再開", btn_go_night: "1日目の夜へ進む",
+            title_night1: "1日目の夜", lbl_choose_silence: "発言権を剥奪する者を選べ", btn_submit: "決定する", msg_night_rest: "夜が更けました...<br>朝まで体を休めてください。", btn_rest: "体を休める", msg_wait_action: "待機中...",
+            title_disc2: "最終弁論", msg_silenced_rule: "※剥奪されたプレイヤーは言葉を発してはいけません", msg_auto_vote: "時間が来ると自動的に投票へ進みます", btn_force_vote: "すぐに投票へ",
+            title_voting: "VOTING", lbl_shackle_done: "「枷」は達成できましたか？", btn_yes: "はい", btn_no: "いいえ", lbl_choose_final: "最終回答を選択してください", btn_confirm_ans: "この回答で決定する", msg_counting: "開票中...", btn_back_setup: "設定へ戻る",
+            
+            placeholder_name: "プレイヤー名", placeholder_room: "Room ID (4桁)", placeholder_shackle: "相手に3回以上反論する\n特定のワードを5回言う",
+            msg_pass_phone: "さんにスマホを回してください。", msg_show_role: "正体を表示します。", msg_show_vote: "投票を行います。本人ですか？", msg_select_target: "ターゲットを選択してください。<br><small style='font-size:0.75rem; color:#888;'>※複数いる場合はランダム決定。</small>", msg_remember_role: "今は役職を確認してください。",
+            msg_your_shackle: "あなたの枷: <br>", msg_seer_target: "人狼のターゲットは: <br>", msg_ww_target: "最終ターゲット: <br>", msg_help_ww: "人狼の誘導を助けてください。<br><small style='font-size:0.8rem; color:#888;'>※ターゲットはわかりません</small>", msg_stop_ww: "人狼の誘導を阻止してください。",
+            msg_partner: "<br><span style='font-size:0.9rem; color:#ff7675;'>仲間: %s</span>", msg_no_partner: "<br><span style='font-size:0.9rem; color:#888;'>仲間の人狼はいません</span>",
+            msg_silenced: "【%s】が<br>発言権を剥奪された！", msg_nobody: "誰も", msg_win_ww: "人狼陣営の勝利", msg_win_cit: "市民陣営の勝利", msg_shackle_success: "【枷】完遂！", msg_shackle_fail: "【枷】未達成により敗北", lbl_answer: "回答: ", lbl_aim: "人狼の狙い: ", lbl_vote_status: "状況: %c/%t", err_name: "名前を入力してください", err_id: "名前とIDを入力してください", err_over: "役職オーバー"
+        },
+        en: {
+            app_title: "FALSE DILEMMA", btn_create_room: "Create Room", btn_offline: "Play Offline", btn_join_room: "Join Room", lbl_tell_id: "Share this ID with your friends", btn_go_config: "Go to Role Settings", msg_waiting_host: "Waiting for host...",
+            title_player_count: "Player Count", lbl_how_many: "How many players?", btn_back: "Back", btn_next_config: "Next",
+            title_role_settings: "Role Settings", role_ww: "Werewolf", role_mad: "Madman", role_seer: "Seer", role_pris: "Prisoner", role_bill: "Billionaire", role_vil: "Villager (Remain)", btn_go_reveal: "Confirm Roles", msg_host_editing: "Host is editing settings...",
+            btn_start_action: "Start Action", btn_yes_me: "Yes, it's me", btn_no_me: "No", btn_done_check: "Confirm", msg_wait_others: "Waiting for others...",
+            title_disc1: "DISCUSSION (Day 1)", btn_pause: "Pause", btn_pause2: "Resume", btn_go_night: "Go to Night 1",
+            title_night1: "Night 1", lbl_choose_silence: "Choose someone to silence", btn_submit: "Submit", msg_night_rest: "Night has fallen...<br>Rest until morning.", btn_rest: "Rest", msg_wait_action: "Waiting...",
+            title_disc2: "Final Defense", msg_silenced_rule: "*Silenced players must not speak.", msg_auto_vote: "Auto-voting when time is up", btn_force_vote: "Vote Now",
+            title_voting: "VOTING", lbl_shackle_done: "Did you achieve your Shackle?", btn_yes: "Yes", btn_no: "No", lbl_choose_final: "Select your final answer", btn_confirm_ans: "Confirm Answer", msg_counting: "Counting...", btn_back_setup: "Back to Setup",
+            
+            placeholder_name: "Player Name", placeholder_room: "Room ID", placeholder_shackle: "Rebut 3 times\nSay specific word 5 times",
+            msg_pass_phone: ", please take the phone.", msg_show_role: "Displaying your true identity.", msg_show_vote: "Time to vote. Are you this player?", msg_select_target: "Select a target.<br><small style='font-size:0.75rem; color:#888;'>*Randomly decided if multiple werewolves.</small>", msg_remember_role: "Please remember your role for now.",
+            msg_your_shackle: "Your Shackle: <br>", msg_seer_target: "Werewolf's target: <br>", msg_ww_target: "Final target: <br>", msg_help_ww: "Help the Werewolves win.<br><small style='font-size:0.8rem; color:#888;'>*You don't know the target.</small>", msg_stop_ww: "Stop the Werewolves' plan.",
+            msg_partner: "<br><span style='font-size:0.9rem; color:#ff7675;'>Partner: %s</span>", msg_no_partner: "<br><span style='font-size:0.9rem; color:#888;'>No other werewolves.</span>",
+            msg_silenced: "[%s] has been<br>silenced!", msg_nobody: "Nobody", msg_win_ww: "Werewolves Win", msg_win_cit: "Citizens Win", msg_shackle_success: "[Shackle] Achieved!", msg_shackle_fail: "Lost due to unachieved Shackle", lbl_answer: "Answer: ", lbl_aim: "WW's Target: ", lbl_vote_status: "Status: %c/%t", err_name: "Please enter your name.", err_id: "Please enter name and ID.", err_over: "Too many roles"
+        },
+        fr: {
+            app_title: "FAUX DILEMME", btn_create_room: "Créer un Salon", btn_offline: "Jouer Hors Ligne", btn_join_room: "Rejoindre", lbl_tell_id: "Partagez cet ID", btn_go_config: "Paramètres des Rôles", msg_waiting_host: "En attente de l'hôte...",
+            title_player_count: "Nombre de Joueurs", lbl_how_many: "Combien de joueurs ?", btn_back: "Retour", btn_next_config: "Suivant",
+            title_role_settings: "Paramètres des Rôles", role_ww: "Loup-garou", role_mad: "Fou", role_seer: "Voyante", role_pris: "Prisonnier", role_bill: "Milliardaire", role_vil: "Villageois (Reste)", btn_go_reveal: "Confirmer Rôles", msg_host_editing: "L'hôte modifie les paramètres...",
+            btn_start_action: "Commencer l'Action", btn_yes_me: "Oui, c'est moi", btn_no_me: "Non", btn_done_check: "Terminé", msg_wait_others: "En attente des autres...",
+            title_disc1: "DISCUSSION (Jour 1)", btn_pause: "Pause", btn_pause2: "Reprendre", btn_go_night: "Aller à la Nuit 1",
+            title_night1: "Nuit 1", lbl_choose_silence: "Choisissez qui réduire au silence", btn_submit: "Soumettre", msg_night_rest: "La nuit est tombée...<br>Reposez-vous.", btn_rest: "Se reposer", msg_wait_action: "En attente...",
+            title_disc2: "Plaidoyer Final", msg_silenced_rule: "*Les joueurs réduits au silence ne doivent pas parler.", msg_auto_vote: "Passera automatiquement au vote.", btn_force_vote: "Voter Maintenant",
+            title_voting: "VOTE", lbl_shackle_done: "Avez-vous accompli vos Chaînes ?", btn_yes: "Oui", btn_no: "Non", lbl_choose_final: "Sélectionnez votre réponse", btn_confirm_ans: "Confirmer", msg_counting: "Dépouillement...", btn_back_setup: "Retour aux Paramètres",
+            
+            placeholder_name: "Nom du Joueur", placeholder_room: "ID du Salon", placeholder_shackle: "Réfuter 3 fois\nDire un mot spécifique 5 fois",
+            msg_pass_phone: ", veuillez prendre le téléphone.", msg_show_role: "Affichage de votre identité.", msg_show_vote: "C'est l'heure de voter. Est-ce vous ?", msg_select_target: "Sélectionnez une cible.<br><small style='font-size:0.75rem; color:#888;'>*Aléatoire si plusieurs loups-garous.</small>", msg_remember_role: "Mémorisez votre rôle pour le moment.",
+            msg_your_shackle: "Vos Chaînes : <br>", msg_seer_target: "Cible du Loup-garou : <br>", msg_ww_target: "Cible Finale : <br>", msg_help_ww: "Aidez les Loups-garous.<br><small style='font-size:0.8rem; color:#888;'>*Cible inconnue.</small>", msg_stop_ww: "Arrêtez le plan des Loups-garous.",
+            msg_partner: "<br><span style='font-size:0.9rem; color:#ff7675;'>Partenaire: %s</span>", msg_no_partner: "<br><span style='font-size:0.9rem; color:#888;'>Aucun autre loup-garou.</span>",
+            msg_silenced: "[%s] a été<br>réduit au silence !", msg_nobody: "Personne", msg_win_ww: "Victoire des Loups-garous", msg_win_cit: "Victoire des Citoyens", msg_shackle_success: "[Chaînes] Accomplies !", msg_shackle_fail: "Défaite: Chaînes non accomplies", lbl_answer: "Réponse: ", lbl_aim: "Cible: ", lbl_vote_status: "Statut: %c/%t", err_name: "Entrez votre nom.", err_id: "Entrez le nom et l'ID.", err_over: "Trop de rôles"
+        },
+        zh: {
+            app_title: "虚假两难", btn_create_room: "创建房间", btn_offline: "线下游玩", btn_join_room: "加入房间", lbl_tell_id: "请将此ID告诉朋友", btn_go_config: "前往角色设置", msg_waiting_host: "等待房主设置...",
+            title_player_count: "玩家人数", lbl_how_many: "多少人进行游戏？", btn_back: "返回", btn_next_config: "下一步",
+            title_role_settings: "角色设置", role_ww: "狼人", role_mad: "狂人", role_seer: "预言家", role_pris: "囚犯", role_bill: "富豪", role_vil: "村民 (剩余)", btn_go_reveal: "确认角色", msg_host_editing: "房主正在编辑设置...",
+            btn_start_action: "开始行动", btn_yes_me: "是的，是我", btn_no_me: "不是", btn_done_check: "确认完毕", msg_wait_others: "等待其他人准备...",
+            title_disc1: "讨论 (第1天)", btn_pause: "暂停", btn_pause2: "继续", btn_go_night: "进入第一天夜晚",
+            title_night1: "第一天夜晚", lbl_choose_silence: "选择剥夺发言权的玩家", btn_submit: "确定", msg_night_rest: "夜深了...<br>请休息到天亮。", btn_rest: "休息", msg_wait_action: "等待中...",
+            title_disc2: "最终辩论", msg_silenced_rule: "※被剥夺发言权的玩家禁止说话", msg_auto_vote: "时间到后将自动进入投票", btn_force_vote: "立即投票",
+            title_voting: "投票", lbl_shackle_done: "你完成「枷锁」了吗？", btn_yes: "是", btn_no: "否", lbl_choose_final: "选择最终答案", btn_confirm_ans: "确认此答案", msg_counting: "计票中...", btn_back_setup: "返回设置",
+            
+            placeholder_name: "玩家名称", placeholder_room: "房间号", placeholder_shackle: "反驳3次\n说特定词5次",
+            msg_pass_phone: "，请接过手机。", msg_show_role: "显示你的身份。", msg_show_vote: "开始投票。是你本人吗？", msg_select_target: "选择引导目标。<br><small style='font-size:0.75rem; color:#888;'>※多名狼人时随机决定。</small>", msg_remember_role: "请先记住你的角色。",
+            msg_your_shackle: "你的枷锁: <br>", msg_seer_target: "狼人的目标是: <br>", msg_ww_target: "最终目标: <br>", msg_help_ww: "协助狼人。<br><small style='font-size:0.8rem; color:#888;'>※你不知道目标。</small>", msg_stop_ww: "阻止狼人的计划。",
+            msg_partner: "<br><span style='font-size:0.9rem; color:#ff7675;'>同伴: %s</span>", msg_no_partner: "<br><span style='font-size:0.9rem; color:#888;'>没有其他狼人</span>",
+            msg_silenced: "【%s】的<br>发言权被剥夺了！", msg_nobody: "无人", msg_win_ww: "狼人阵营胜利", msg_win_cit: "平民阵营胜利", msg_shackle_success: "【枷锁】完成！", msg_shackle_fail: "因未完成枷锁而失败", lbl_answer: "答案: ", lbl_aim: "狼人目标: ", lbl_vote_status: "状况: %c/%t", err_name: "请输入名称", err_id: "请输入名称和ID", err_over: "角色过多"
+        }
+    };
+
+    let currentLang = localStorage.getItem('cc_lang') || 'ja';
+    function _(key) { return i18n[currentLang][key] || key; }
+
+    function changeLang(lang) {
+        currentLang = lang; localStorage.setItem('cc_lang', lang); applyLang();
+    }
+
+    function applyLang() {
+        document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = _(el.getAttribute('data-i18n')); });
+        document.getElementById('user-name').placeholder = _('placeholder_name');
+        document.getElementById('room-id-input').placeholder = _('placeholder_room');
+        
+        let shackEl = document.getElementById('global-shackles');
+        if(shackEl.value.includes("反論する") || shackEl.value.includes("Rebut") || shackEl.value.includes("Réfuter") || shackEl.value.includes("反驳")) {
+            shackEl.value = _('placeholder_shackle');
+        }
+        document.getElementById('lang-select').value = currentLang;
+        updateVillagerCount();
+    }
+
+    function getRoleName(r) {
+        if(r==='人狼') return _('role_ww'); if(r==='狂人') return _('role_mad'); if(r==='占い師') return _('role_seer');
+        if(r==='囚人') return _('role_pris'); if(r==='富豪') return _('role_bill'); if(r==='村人') return _('role_vil').split(' ')[0];
+        return r;
+    }
+
+    let mqttClient = null, roomTopic = "";
+    let isOnline=false, isHost=false, totalPlayers = 4, roleCounts = { ww: 1, mad: 0, seer: 1, prisoner: 1, billionaire: 1 };
+    let myId="", roomId="", myName="", players=[], lastRoleMap={}, myRoleData={}, wwTarget="", readyCount=0, votes={}, timerInt=null, timeLeft=300;
+    let shackleAchieved = true, shackleConfirmed = true, offlineRound = 1, offlineStep = 0, offlineVoteStep = 0;
+    let tempVoteChoice = "", tempTarget = "", wwTargetList =[], gameStarted = false, currentPhase = 'disc1'; 
+    let silenceList = [], silencedPlayerId = "", tempSilenceTarget = "", readyCountNight = 0;
+    const icons = { "人狼":"😈", "狂人":"🤡", "占い師":"🔮", "囚人":"⛓️", "富豪":"👑", "村人":"👨‍🌾" };
+
+    window.onload = () => { 
+        applyLang();
+        document.getElementById('user-name').value = localStorage.getItem('cc_u') || "";
+        updateOfflineNameInputs();
+        myId = "user_" + Math.random().toString(36).substring(2, 10);
+        history.replaceState({ screen: 'screen-lobby', lobby: 'initial' }, '', '');
+    };
+
+    window.onpopstate = (event) => {
+        if (gameStarted) { history.pushState(null, '', ''); return; }
+        if (event.state) restoreState(event.state); else restoreState({ screen: 'screen-lobby', lobby: 'initial' });
+    };
+
+    function pushHistoryState(screenId, lobbyState = null) { if (gameStarted) return; history.pushState({ screen: screenId, lobby: lobbyState }, '', ''); }
+    function show(id) { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+    function log(m){ document.getElementById('status-bar').innerText = m; }
+
+    function restoreState(state) {
+        if (isOnline && state.screen === 'screen-lobby' && state.lobby === 'initial') { location.reload(); return; }
+        if (isOnline && isHost && state.screen === 'screen-lobby' && state.lobby === 'waiting') { broadcast({type: 'back-to-lobby-waiting'}); }
+        show(state.screen);
+        if(state.screen==='screen-role-config') updateVillagerCount();
+        if (state.screen === 'screen-lobby') {
+            document.getElementById('initial-setup').style.display = state.lobby === 'initial' ? 'block' : 'none';
+            document.getElementById('lobby-waiting').style.display = state.lobby === 'waiting' ? 'block' : 'none';
+        }
+        if (state.screen === 'screen-role-config') {
+            let isGuest = isOnline && !isHost;
+            document.querySelectorAll('.btn-step').forEach(b => b.style.display = isGuest ? 'none' : 'inline-block');
+            document.getElementById('global-shackles').readOnly = isGuest;
+            document.getElementById('host-config-btns').style.display = isGuest ? 'none' : 'flex';
+            document.getElementById('guest-config-wait-msg').style.display = isGuest ? 'block' : 'none';
+        }
+    }
+
+    function initConnection(rId, hosting) {
+        log("Connecting...");
+        mqttClient = new Paho.MQTT.Client("broker.emqx.io", 8084, "/mqtt", myId);
+        mqttClient.onConnectionLost = (resp) => { if (resp.errorCode !== 0) { alert("Disconnected"); resetButtons(); } };
+        mqttClient.onMessageArrived = (msg) => { try { let d = JSON.parse(msg.payloadString); if (d.senderId !== myId) handleData(d); } catch(e) {} };
+        roomTopic = "cc-v38-room-" + rId;
+        mqttClient.connect({
+            useSSL: true, timeout: 5,
+            onSuccess: () => {
+                log("Connected"); mqttClient.subscribe(roomTopic); isOnline = true;
+                if(hosting) {
+                    isHost = true; roomId = rId; players = [{id:myId, name:myName}]; 
+                    document.getElementById('initial-setup').style.display='none'; document.getElementById('lobby-waiting').style.display='block'; document.getElementById('display-id').innerText=roomId; 
+                    updateLobbyUI(); pushHistoryState('screen-lobby', 'waiting'); restoreState({ screen: 'screen-lobby', lobby: 'waiting' });
+                } else {
+                    isHost = false; roomId = rId; broadcast({type:'join', id:myId, name:myName});
+                    document.getElementById('initial-setup').style.display='none'; document.getElementById('lobby-waiting').style.display='block'; document.getElementById('display-id').innerText=roomId; 
+                    pushHistoryState('screen-lobby', 'waiting'); restoreState({ screen: 'screen-lobby', lobby: 'waiting' });
+                }
+                resetButtons();
+            },
+            onFailure: (err) => { alert("Connection failed. Try 4G/5G."); resetButtons(); }
+        });
+    }
+
+    function resetButtons() { document.getElementById('host-init-btn').innerText = _('btn_create_room'); document.getElementById('host-init-btn').disabled = false; document.getElementById('join-init-btn').innerText = _('btn_join_room'); document.getElementById('join-init-btn').disabled = false; }
+    function broadcast(d) { if(mqttClient && mqttClient.isConnected()) { d.senderId = myId; let message = new Paho.MQTT.Message(JSON.stringify(d)); message.destinationName = roomTopic; mqttClient.send(message); } }
+
+    function adjustTotalPlayers(v) { totalPlayers = Math.max(3, Math.min(10, totalPlayers + v)); document.getElementById('giant-count-display').innerText = totalPlayers; updateOfflineNameInputs(); updateVillagerCount(); }
+    function updateOfflineNameInputs() { const container = document.getElementById('off-name-container'); container.innerHTML = ""; for(let i=1; i<=totalPlayers; i++) { let saved = localStorage.getItem('cc_o'+i) || "Player"+i; container.innerHTML += `<input type="text" id="off-p${i}" value="${saved}" oninput="localStorage.setItem('cc_o${i}', this.value)">`; } }
+    function changeRoleCount(key, v) { roleCounts[key] = Math.max(0, roleCounts[key] + v); if(key === 'ww' && roleCounts[key] < 1) roleCounts[key] = 1; document.getElementById('val-'+key).innerText = roleCounts[key]; updateVillagerCount(); }
+
+    function updateVillagerCount() {
+        let max = isOnline ? (players.length || 1) : totalPlayers;
+        let setRoles = Object.values(roleCounts).reduce((a,b)=>a+b, 0);
+        let villagers = max - setRoles;
+        const vDisplay = document.getElementById('display-villager-count');
+        const startBtn = document.getElementById('final-start-btn');
+        if(villagers < 0 && (!isOnline || isHost)) { vDisplay.innerText = villagers; vDisplay.style.color = "var(--neon-red)"; startBtn.disabled = true; startBtn.innerText = _('err_over'); } 
+        else { vDisplay.innerText = villagers; vDisplay.style.color = "#fff"; startBtn.disabled = false; startBtn.innerText = _('btn_go_reveal'); }
+        if(isOnline && isHost) syncConfig();
+    }
+
+    function syncConfig() { if(!isHost || !isOnline) return; broadcast({ type: 'config-sync', roleCounts: roleCounts, shackles: document.getElementById('global-shackles').value, villagers: document.getElementById('display-villager-count').innerText }); }
+    function startOfflineSetup() { isOnline = false; isHost = true; updateOfflineNameInputs(); pushHistoryState('screen-offline-setup'); restoreState({ screen: 'screen-offline-setup' }); }
+
+    function initHost(){ 
+        myName = document.getElementById('user-name').value; if(!myName) return alert(_('err_name')); localStorage.setItem('cc_u', myName); 
+        document.getElementById('host-init-btn').innerText = "..."; document.getElementById('host-init-btn').disabled = true;
+        let newRoomId = Math.floor(1000 + Math.random() * 9000).toString(); initConnection(newRoomId, true); 
+    }
+    
+    function initGuest(){ 
+        myName = document.getElementById('user-name').value; let rid = document.getElementById('room-id-input').value.trim(); if(!myName || !rid) return alert(_('err_id')); localStorage.setItem('cc_u', myName); 
+        document.getElementById('join-init-btn').innerText = "..."; document.getElementById('join-init-btn').disabled = true;
+        initConnection(rid, false); 
+    }
+
+    function updateLobbyUI(){ document.getElementById('member-list').innerHTML=players.map(p=>"・"+p.name).join("<br>"); if(isHost){ document.getElementById('host-go-to-config').style.display = (players.length>=2) ? 'block' : 'none'; broadcast({type:'lobby', players}); updateVillagerCount(); } }
+    function showRoleConfig() { if(isOnline && isHost) broadcast({type:'show-config'}); pushHistoryState('screen-role-config'); restoreState({ screen: 'screen-role-config' }); }
+
+    function handleData(d){
+        if(d.type==='join' && isHost){ players.push({id:d.id, name:d.name}); updateLobbyUI(); }
+        if(d.type==='lobby'){ players=d.players; updateLobbyUI(); }
+        if(d.type==='show-config'){ pushHistoryState('screen-role-config'); restoreState({ screen: 'screen-role-config' }); }
+        if(d.type==='back-to-lobby-waiting'){ pushHistoryState('screen-lobby', 'waiting'); restoreState({ screen: 'screen-lobby', lobby: 'waiting' }); }
+        if(d.type==='config-sync'){
+            roleCounts = d.roleCounts; document.getElementById('val-ww').innerText = roleCounts.ww; document.getElementById('val-mad').innerText = roleCounts.mad; document.getElementById('val-seer').innerText = roleCounts.seer; document.getElementById('val-prisoner').innerText = roleCounts.prisoner; document.getElementById('val-billionaire').innerText = roleCounts.billionaire;
+            document.getElementById('global-shackles').value = d.shackles;
+            const vDisplay = document.getElementById('display-villager-count'); vDisplay.innerText = d.villagers; vDisplay.style.color = (parseInt(d.villagers) < 0) ? "var(--neon-red)" : "#fff";
+        }
+        if(d.type==='start-reveal'){ 
+            gameStarted = true; lastRoleMap = d.roleMap; myRoleData = d.roleMap[myId]; wwTarget = ""; tempTarget = ""; wwTargetList =[]; readyCount=0; votes={}; silenceList=[]; readyCountNight=0;
+            document.body.classList.remove('citizen-win-bg'); show('screen-confirm'); document.getElementById('confirm-name').innerText = myName; document.getElementById('confirm-instruction').innerText = _('msg_show_role');
+            document.getElementById('confirm-yes-btn').onclick = showRole; 
+        }
+        if(d.type==='ww-choice' && isHost){ wwTargetList.push(d.target); }
+        if(d.type==='player-ready' && isHost){ readyCount++; checkAllReady(); }
+        if(d.type==='start-discussion'){ wwTarget=d.target; startDiscussion(); }
+        if(d.type==='sync-time'){ timeLeft=d.time; updateTimerDisp(); if(d.active && !timerInt) startTimerLocal(); else if(!d.active && timerInt){clearInterval(timerInt); timerInt=null;} }
+        if(d.type==='go-to-night') { triggerNightScreen(); }
+        if(d.type==='submit-night' && isHost) { if(d.target) silenceList.push(d.target); readyCountNight++; checkAllReadyNight(); }
+        if(d.type==='start-discussion2') { silencedPlayerId = d.silencedId; startDiscussion2(); }
+        if(d.type==='go-to-vote') { triggerVoteScreen(); }
+        if(d.type==='submit-vote' && isHost){ votes[d.id]={choice:d.choice, achieved:d.achieved}; updateOnlineVoteStatus(); }
+        if(d.type==='final-result') displayResult(d);
+        if(d.type==='back-to-setup') { gameStarted = false; pushHistoryState('screen-lobby', 'waiting'); restoreState({ screen: 'screen-lobby', lobby: 'waiting' }); }
+    }
+
+    function validateAndStart() {
+        try {
+            if(!isOnline) { players =[]; for(let i=1; i<=totalPlayers; i++) { let el = document.getElementById('off-p'+i); players.push({id:'p'+i, name: el ? el.value : "Player"+i}); } }
+            hostStartGame();
+        } catch (error) {}
+    }
+
+    function hostStartGame(){
+        gameStarted = true; wwTarget = ""; tempTarget = ""; wwTargetList =[]; readyCount = 0; votes = {}; silenceList=[]; readyCountNight=0;
+        let rolePool =[];
+        for(let i=0; i<roleCounts.ww; i++) rolePool.push("人狼");
+        for(let i=0; i<roleCounts.mad; i++) rolePool.push("狂人");
+        for(let i=0; i<roleCounts.seer; i++) rolePool.push("占い師");
+        for(let i=0; i<roleCounts.prisoner; i++) rolePool.push("囚人");
+        for(let i=0; i<roleCounts.billionaire; i++) rolePool.push("富豪");
+        while(rolePool.length < players.length) rolePool.push("村人");
+        rolePool.sort(()=>Math.random()-0.5);
+
+        let shacksText = document.getElementById('global-shackles').value; localStorage.setItem('cc_sOn', shacksText);
+        let shacks = shacksText.split('\n').filter(s=>s.trim());
+        let kase = shacks.length > 0 ? shacks[Math.floor(Math.random()*shacks.length)] : "None";
+
+        let roleMap={}; players.forEach((p,i)=>{ let r=rolePool[i] || "村人"; roleMap[p.id]={role:r, shackle:r==="囚人"?kase:"", votes:r==="富豪"?2:1}; });
+        let wwNames = players.filter(p => roleMap[p.id].role === '人狼').map(p => p.name);
+        players.forEach(p => { if(roleMap[p.id].role === '人狼') roleMap[p.id].partners = wwNames.filter(n => n !== p.name); });
+        lastRoleMap = roleMap;
+
+        if(isOnline) { 
+            broadcast({type:'start-reveal', roleMap}); myRoleData = roleMap[myId]; document.body.classList.remove('citizen-win-bg');
+            document.getElementById('confirm-yes-btn').onclick = showRole; document.getElementById('confirm-instruction').innerText = _('msg_show_role');
+            show('screen-confirm'); document.getElementById('confirm-name').innerText = myName; 
+        } else { 
+            offlineRound = 1; offlineStep = 0; triggerHandover(players[0].name, prepareOfflineIdentity, _('btn_start_action')); 
+        }
+    }
+
+    let handoverNextFunc = null;
+    function triggerHandover(playerName, nextFunc, btnText) { document.getElementById('handover-name').innerText = playerName; document.getElementById('handover-btn').innerText = btnText; handoverNextFunc = nextFunc; show('screen-handover'); }
+    function handoverComplete() { if(handoverNextFunc) handoverNextFunc(); }
+    
+    function prepareOfflineIdentity() { 
+        myRoleData = lastRoleMap[players[offlineStep].id]; 
+        document.getElementById('confirm-name').innerText = players[offlineStep].name + " さん"; 
+        document.getElementById('confirm-instruction').innerText = _('msg_show_role');
+        document.getElementById('confirm-yes-btn').onclick = showRole;
+        show('screen-confirm'); 
+    }
+    
+    function showRole(){
+        show('screen-reveal');
+        document.getElementById('my-role-name').innerText = getRoleName(myRoleData.role);
+        document.getElementById('my-role-icon').innerText = icons[myRoleData.role] || "";
+        document.getElementById('my-role-name').className = "color-" + myRoleData.role;
+        let info = document.getElementById('reveal-info-box');
+        info.innerHTML = "";
+        
+        document.getElementById('ww-choice').style.display = 'none';
+        document.getElementById('reveal-done-btn').style.display = 'block';
+        tempTarget = ""; document.getElementById('target-A').className = 'btn-outline'; document.getElementById('target-B').className = 'btn-outline';
+
+        let partnerText = "";
+        if (myRoleData.role === '人狼') {
+            if (myRoleData.partners && myRoleData.partners.length > 0) partnerText = _('msg_partner').replace('%s', myRoleData.partners.join(', '));
+            else partnerText = _('msg_no_partner');
+        }
+
+        if(!isOnline) {
+            if(offlineRound === 1) {
+                if(myRoleData.role === '人狼') { 
+                    info.innerHTML = _('msg_select_target') + partnerText; 
+                    document.getElementById('ww-choice').style.display = 'block'; document.getElementById('reveal-done-btn').style.display = 'none';
+                } else if(myRoleData.role === '狂人') {
+                    info.innerHTML = _('msg_help_ww');
+                } else { 
+                    info.innerHTML = _('msg_remember_role');
+                }
+            } else {
+                if(myRoleData.role === "囚人") info.innerHTML = _('msg_your_shackle') + "<b class='color-囚人'>" + myRoleData.shackle + "</b>";
+                else if(myRoleData.role === "占い師") info.innerHTML = _('msg_seer_target') + "<b class='color-人狼'>" + wwTarget + "</b>";
+                else if(myRoleData.role === "人狼") info.innerHTML = _('msg_ww_target') + "<b class='color-人狼'>" + wwTarget + "</b>" + partnerText;
+                else if(myRoleData.role === "狂人") info.innerHTML = _('msg_help_ww');
+                else info.innerHTML = _('msg_stop_ww');
+            }
+        } else {
+            if(myRoleData.role === "囚人") info.innerHTML = _('msg_your_shackle') + "<b class='color-囚人'>" + myRoleData.shackle + "</b>";
+            else if(myRoleData.role === "狂人") info.innerHTML = _('msg_help_ww');
+            else if(myRoleData.role === '人狼') {
+                info.innerHTML = _('msg_select_target') + partnerText; 
+                document.getElementById('ww-choice').style.display = 'block'; document.getElementById('reveal-done-btn').style.display = 'none';
+            } else {
+                info.innerHTML = _('msg_stop_ww');
+            }
+        }
+    }
+
+    function selectTarget(t){ tempTarget = t; document.getElementById('target-A').className = t==='A' ? 'btn-primary' : 'btn-outline'; document.getElementById('target-B').className = t==='B' ? 'btn-primary' : 'btn-outline'; document.getElementById('reveal-done-btn').style.display = 'block'; }
+    
+    function playerReady(){
+        if(isOnline){ 
+            document.getElementById('reveal-done-btn').style.display='none'; document.getElementById('ready-wait-msg').style.display='block';
+            if(isHost){ if(myRoleData.role==='人狼' && tempTarget) wwTargetList.push(tempTarget); readyCount++; checkAllReady(); } 
+            else { if(myRoleData.role==='人狼' && tempTarget) conn.send({type:'ww-choice', target:tempTarget}); broadcast({type:'player-ready'}); } 
+        } else { 
+            if(myRoleData.role==='人狼' && tempTarget) wwTargetList.push(tempTarget);
+            offlineStep++; 
+            if(offlineStep < players.length){ triggerHandover(players[offlineStep].name, prepareOfflineIdentity, _('btn_next_config')); }
+            else { 
+                if(offlineRound === 1) { 
+                    if(wwTargetList.length > 0) wwTarget = wwTargetList[Math.floor(Math.random() * wwTargetList.length)]; else wwTarget = Math.random() < 0.5 ? 'A' : 'B';
+                    offlineRound = 2; offlineStep = 0; triggerHandover(players[0].name, prepareOfflineIdentity, _('btn_go_reveal')); 
+                } else { startDiscussion(); } 
+            } 
+        }
+    }
+
+    function checkAllReady(){ 
+        if(readyCount===players.length){ 
+            if(wwTargetList.length > 0) wwTarget = wwTargetList[Math.floor(Math.random() * wwTargetList.length)]; else wwTarget = Math.random() < 0.5 ? 'A' : 'B';
+            broadcast({type:'start-discussion', target:wwTarget}); startDiscussion(); 
+        }
+    }
+    
+    function startDiscussion(){ 
+        currentPhase = 'disc1'; show('screen-discussion'); 
+        let info = document.getElementById('special-info'); info.style.display = "none"; 
+        timeLeft = 300; updateTimerDisp();
+        document.getElementById('timer-btn').innerText = _('btn_pause');
+        
+        if(isOnline && isHost){ document.getElementById('host-controls').style.display='block'; if(!timerInt) toggleTimer(); } 
+        else if(!isOnline) { document.getElementById('off-controls').style.display='block'; if(!timerInt) startTimerLocal(); } 
+
+        if(isOnline) {
+            if(myRoleData.role==='占い師' || myRoleData.role==='囚人' || myRoleData.role==='狂人' || myRoleData.role==='人狼'){
+                info.style.display = "block";
+                if(myRoleData.role==='占い師') info.innerHTML=_('msg_seer_target') + "<b class='color-占い師'>"+wwTarget+"</b>";
+                else if(myRoleData.role==='囚人') info.innerHTML=_('msg_your_shackle') + "<b class='color-囚人'>"+myRoleData.shackle+"</b>";
+                else if(myRoleData.role==='人狼') { let pText = myRoleData.partners && myRoleData.partners.length > 0 ? _('msg_partner').replace('%s', myRoleData.partners.join(', ')) : ""; info.innerHTML=_('msg_ww_target') + "<b class='color-人狼'>"+wwTarget+"</b>" + pText; }
+                else if(myRoleData.role==='狂人') info.innerHTML=_('msg_help_ww');
+            }
+        }
+    }
+    
+    function startTimerLocal(){ 
+        if(timerInt) clearInterval(timerInt);
+        timerInt=setInterval(()=>{
+            if(timeLeft>0){ timeLeft--; updateTimerDisp(); }
+            else { 
+                clearInterval(timerInt); timerInt=null; 
+                if(currentPhase === 'disc2' && (isHost || !isOnline)) { setTimeout(() => { hostGoToVote(); }, 1000); }
+            }
+        },1000); 
+    }
+    function toggleTimer(){ if(timerInt){clearInterval(timerInt);timerInt=null;document.getElementById('timer-btn').innerText=_('btn_resume');}else{startTimerLocal();document.getElementById('timer-btn').innerText=_('btn_pause2');} if(isHost)broadcast({type:'sync-time', time:timeLeft, active:!!timerInt}); }
+    function updateTimerDisp(){ 
+        let m=Math.floor(timeLeft/60).toString().padStart(2,'0'), s=(timeLeft%60).toString().padStart(2,'0'); 
+        if(currentPhase === 'disc1') document.getElementById('timer-display1').innerText=m+":"+s; else document.getElementById('timer-display2').innerText=m+":"+s;
+    }
+    function adjustTime(v){ timeLeft=Math.max(0,timeLeft+v); updateTimerDisp(); if(isOnline && isHost)broadcast({type:'sync-time', time:timeLeft, active:!!timerInt}); }
+
+    function hostGoToNight(){ 
+        if(timerInt){clearInterval(timerInt);timerInt=null;} 
+        if(isOnline) { broadcast({type:'go-to-night'}); triggerNightScreen(); } 
+        else { offlineRound = 3; offlineStep = 0; silenceList = []; triggerOfflineNightLoop(); } 
+    }
+
+    function triggerOfflineNightLoop() { triggerHandover(players[offlineStep].name, prepareOfflineNight, _('btn_start_action')); }
+    function prepareOfflineNight() {
+        myRoleData = lastRoleMap[players[offlineStep].id]; 
+        document.getElementById('confirm-name').innerText = players[offlineStep].name + " さん"; 
+        document.getElementById('confirm-instruction').innerText = _('msg_show_role');
+        document.getElementById('confirm-yes-btn').onclick = () => { triggerNightScreen(); };
+        show('screen-confirm');
+    }
+
+    function triggerNightScreen() {
+        show('screen-night');
+        document.getElementById('night-ww-action').style.display = 'none'; document.getElementById('night-other-action').style.display = 'none';
+        document.getElementById('night-wait-msg').style.display = 'none'; document.getElementById('night-ww-submit').style.display = 'none'; document.getElementById('night-rest-btn').style.display = 'none';
+        tempSilenceTarget = "";
+        
+        if (myRoleData.role === '人狼') {
+            document.getElementById('night-ww-action').style.display = 'block';
+            let listHtml = ""; let currentId = isOnline ? myId : players[offlineStep].id;
+            players.forEach(p => {
+                if(p.id !== currentId) { listHtml += `<button class="btn-outline silence-btn" onclick="selectSilence('${p.id}', this)">${p.name}</button>`; }
+            });
+            document.getElementById('silence-target-list').innerHTML = listHtml;
+        } else {
+            document.getElementById('night-other-action').style.display = 'block';
+            setTimeout(() => { document.getElementById('night-rest-btn').style.display = 'block'; }, 3000); 
+        }
+    }
+
+    function selectSilence(targetId, btnEl) {
+        tempSilenceTarget = targetId;
+        document.querySelectorAll('.silence-btn').forEach(b => { b.classList.remove('active'); b.classList.replace('btn-primary', 'btn-outline'); });
+        btnEl.classList.add('active'); btnEl.classList.replace('btn-outline', 'btn-primary');
+        document.getElementById('night-ww-submit').style.display = 'block';
+    }
+
+    function submitNightAction() {
+        document.getElementById('night-ww-action').style.display = 'none'; document.getElementById('night-other-action').style.display = 'none'; document.getElementById('night-wait-msg').style.display = 'block';
+        if(isOnline) {
+            if(isHost) { if(myRoleData.role === '人狼' && tempSilenceTarget) silenceList.push(tempSilenceTarget); readyCountNight++; checkAllReadyNight(); } 
+            else { broadcast({type:'submit-night', target: tempSilenceTarget}); }
+        } else {
+            if(myRoleData.role === '人狼' && tempSilenceTarget) silenceList.push(tempSilenceTarget);
+            offlineStep++;
+            if(offlineStep < players.length) { triggerOfflineNightLoop(); } 
+            else { checkAllReadyNight(); }
+        }
+    }
+
+    function checkAllReadyNight() {
+        if( (isOnline && readyCountNight === players.length) || (!isOnline) ) {
+            let finalSilencedId = "";
+            if(silenceList.length > 0) finalSilencedId = silenceList[Math.floor(Math.random() * silenceList.length)];
+            
+            if(isOnline) broadcast({type: 'start-discussion2', silencedId: finalSilencedId});
+            silencedPlayerId = finalSilencedId;
+            startDiscussion2();
+        }
+    }
+
+    function startDiscussion2() {
+        currentPhase = 'disc2'; show('screen-discussion2');
+        let sp = players.find(p => p.id === silencedPlayerId);
+        document.getElementById('silenced-msg-box').innerHTML = _('msg_silenced').replace('%s', sp ? sp.name : _('msg_nobody'));
+        timeLeft = 30; updateTimerDisp();
+        document.getElementById('force-vote-btn').style.display = (!isOnline || isHost) ? "block" : "none";
+
+        if(isOnline && isHost) { startTimerLocal(); broadcast({type:'sync-time', time:timeLeft, active:true}); } 
+        else if(!isOnline) { startTimerLocal(); }
+    }
+
+    function hostGoToVote(){ if(timerInt){clearInterval(timerInt);timerInt=null;} if(isOnline) { broadcast({type:'go-to-vote'}); triggerVoteScreen(); } else { offlineVoteStep = 0; triggerOfflineVoteLoop(); } }
+
+    function triggerVoteScreen() { 
+        show('screen-vote'); tempVoteChoice = ""; 
+        const isP = (myRoleData.role === '囚人'); 
+        document.getElementById('shackle-confirm-step').style.display = isP ? 'block' : 'none'; 
+        document.getElementById('vote-action-area').style.display = 'block'; document.getElementById('opening-msg').style.display = 'none'; document.getElementById('vote-status-text').innerText = "";
+        document.getElementById('vbtn-A').disabled = isP; document.getElementById('vbtn-B').disabled = isP; 
+        document.getElementById('vbtn-A').className = "btn-outline"; document.getElementById('vbtn-B').className = "btn-outline"; 
+        document.getElementById('vbtn-confirm').style.display = 'none'; 
+        shackleConfirmed = !isP; 
+    }
+
+    function setShackleStatus(a) { shackleAchieved = a; shackleConfirmed = true; document.getElementById('shackle-yes').className = a ? "btn-yes active" : "btn-outline"; document.getElementById('shackle-no').className = !a ? "btn-no active" : "btn-outline"; document.getElementById('vbtn-A').disabled = false; document.getElementById('vbtn-B').disabled = false; }
+    function preSubmitVote(choice) { tempVoteChoice = choice; document.getElementById('vbtn-A').className = (choice === 'A') ? 'btn-primary' : 'btn-outline'; document.getElementById('vbtn-B').className = (choice === 'B') ? 'btn-primary' : 'btn-outline'; document.getElementById('vbtn-confirm').style.display = 'block'; }
+    function finalSubmitVote() { 
+        if(isOnline){ 
+            document.getElementById('vote-action-area').style.display='none'; 
+            if(isHost){ votes[myId] = { choice: tempVoteChoice, achieved: shackleAchieved }; updateOnlineVoteStatus(); } 
+            else { broadcast({type:'submit-vote', id:myId, choice: tempVoteChoice, achieved: shackleAchieved}); document.getElementById('vote-status-text').innerText = _('msg_counting'); } 
+        } else { 
+            votes[players[offlineVoteStep].id] = { choice: tempVoteChoice, achieved: shackleAchieved }; 
+            offlineVoteStep++; 
+            if(offlineVoteStep < players.length) triggerOfflineVoteLoop(); 
+            else { show('screen-vote'); document.getElementById('vote-action-area').style.display = 'none'; document.getElementById('opening-msg').style.display = 'block'; setTimeout(calcResult, 2000); } 
+        } 
+    }
+
+    function updateOnlineVoteStatus() { let c = Object.keys(votes).length; document.getElementById('vote-status-text').innerText = _('lbl_vote_status').replace('%c', c).replace('%t', players.length); if(c === players.length) { document.getElementById('opening-msg').style.display = 'block'; setTimeout(calcResult, 2000); } }
+    
+    function triggerOfflineVoteLoop() { triggerHandover(players[offlineVoteStep].name, prepareOfflineVote, _('btn_start_action')); }
+    function prepareOfflineVote() { let p = players[offlineVoteStep]; myRoleData = lastRoleMap[p.id]; document.getElementById('confirm-name').innerText = p.name + " さん"; document.getElementById('confirm-instruction').innerText = _('msg_show_vote'); document.getElementById('confirm-yes-btn').onclick = () => { triggerVoteScreen(); document.getElementById('vote-player-label').innerText = p.name + " の投票"; }; show('screen-confirm'); }
+
+    function calcResult(){ 
+        let sA=0, sB=0, sS=true; 
+        players.forEach(p=>{ 
+            let v=votes[p.id], r=lastRoleMap[p.id]; 
+            if(v.choice==='A') sA += r.votes; else sB += r.votes; 
+            if(r.role==='囚人' && !v.achieved) sS = false; 
+        }); 
+        let fA = sA >= sB ? 'A' : 'B', w = (fA === wwTarget) || !sS; 
+        let rd = {finalAns:fA, scoreA:sA, scoreB:sB, wwTarget, werewolfWins:w, sSuccess:sS, votes, players, roleMap:lastRoleMap}; 
+        if(isOnline) broadcast({type:'final-result', ...rd}); displayResult(rd); 
+    }
+
+    function displayResult(d){ 
+        show('screen-result'); 
+        let wl=document.getElementById('result-winner'), card=document.getElementById('final-card'), rb=document.getElementById('reset-btn'); 
+        if(d.werewolfWins){ wl.innerText=_('msg_win_ww'); wl.className="color-人狼"; rb.style.background="var(--accent-red)"; } 
+        else { wl.innerText=_('msg_win_cit'); wl.className="color-市民勝利"; document.body.classList.add('citizen-win-bg'); card.classList.add('citizen-win-card'); rb.style.background="var(--accent-gold)"; } 
+        document.getElementById('shackle-msg').innerText = d.sSuccess ? _('msg_shackle_success') : _('msg_shackle_fail'); 
+        document.getElementById('shackle-msg').style.color = d.sSuccess ? "var(--accent-blue)" : "var(--accent-red)"; 
+        document.getElementById('result-text').innerHTML=_('lbl_answer') + "<b>"+d.finalAns+"</b> (A:"+d.scoreA+" / B:"+d.scoreB+")<br>" + _('lbl_aim') + "<b>"+d.wwTarget+"</b>"; 
+        document.getElementById('result-roles').innerHTML=d.players.map(p=>`<div>${p.name}: <span class='color-${d.roleMap[p.id].role}'>${getRoleName(d.roleMap[p.id].role)}</span> (${d.votes[p.id].choice})</div>`).join(""); 
+        rb.style.display = (!isOnline || isHost) ? "block" : "none"; 
+        document.getElementById('confirm-yes-btn').onclick = showRole; // リセット
+    }
+
+    function hostBackToSetup(){ 
+        gameStarted = false; 
+        if(isOnline) { broadcast({type:'back-to-setup'}); pushHistoryState('screen-lobby', 'waiting'); restoreState({ screen: 'screen-lobby', lobby: 'waiting' }); } 
+        else { pushHistoryState('screen-offline-setup'); restoreState({ screen: 'screen-offline-setup' }); } 
+    }
+</script>
+</body>
+</html>
