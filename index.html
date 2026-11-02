@@ -22,7 +22,7 @@
     <!-- Alpine.js for reactive UI -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- FontAwesome icons -->
-    <link rel="stylesheet" href="s://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         body { 
@@ -72,7 +72,7 @@
     </header>
 
     <!-- Main Content Area -->
-    <main class="flex-1 w-full max-w-md mx-auto pb-24 px-4 pt-4">
+    <main class="flex-1 w-full max-w-md mx-auto pb-28 px-4 pt-4">
         
         <!-- TAB 1: OVERVIEW -->
         <div x-show="activeTab === 'overview'" class="space-y-6" x-transition:enter="transition ease-out duration-200">
@@ -257,19 +257,30 @@
         <span x-text="toast.message"></span>
     </div>
 
-    <!-- Bottom Mobile Navigation Bar -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-800/80 px-6 pb-6 pt-3 flex justify-around items-center z-30">
-        <button @click="activeTab = 'overview'" class="flex flex-col items-center space-y-1 transition-colors" :class="activeTab === 'overview' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
-            <i class="fa-solid fa-chart-pie text-base"></i>
-            <span class="text-[10px] font-medium">Overview</span>
+    <!-- Large Mobile Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 px-4 pt-3 pb-7 flex justify-around items-center z-30 shadow-2xl">
+        <button @click="activeTab = 'overview'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'overview' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
+            <div class="flex items-center space-x-1.5 text-lg">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span class="text-xs">📊</span>
+            </div>
+            <span class="text-xs">Overview</span>
         </button>
-        <button @click="activeTab = 'expenses'" class="flex flex-col items-center space-y-1 transition-colors" :class="activeTab === 'expenses' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
-            <i class="fa-solid fa-wallet text-base"></i>
-            <span class="text-[10px] font-medium">Expenses</span>
+
+        <button @click="activeTab = 'expenses'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'expenses' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
+            <div class="flex items-center space-x-1.5 text-lg">
+                <i class="fa-solid fa-wallet"></i>
+                <span class="text-xs">💳</span>
+            </div>
+            <span class="text-xs">Expenses</span>
         </button>
-        <button @click="activeTab = 'settings'" class="flex flex-col items-center space-y-1 transition-colors" :class="activeTab === 'settings' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
-            <i class="fa-solid fa-gear text-base"></i>
-            <span class="text-[10px] font-medium">Settings</span>
+
+        <button @click="activeTab = 'settings'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'settings' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
+            <div class="flex items-center space-x-1.5 text-lg">
+                <i class="fa-solid fa-gear"></i>
+                <span class="text-xs">⚙️</span>
+            </div>
+            <span class="text-xs">Settings</span>
         </button>
     </nav>
 
@@ -299,7 +310,10 @@
                 init() {
                     const saved = localStorage.getItem('budget_tracker_expenses');
                     if (saved) {
-                        try { this.expenses = JSON.parse(saved); } catch (e) {}
+                        try { 
+                            this.expenses = JSON.parse(saved); 
+                            this.sortExpensesByDate();
+                        } catch (e) {}
                     }
                     this.registerServiceWorker();
                     this.syncFromSheet();
@@ -321,6 +335,7 @@
                             const fetchedExpenses = await res.json();
                             if (Array.isArray(fetchedExpenses) && fetchedExpenses.length > 0) {
                                 this.expenses = fetchedExpenses;
+                                this.sortExpensesByDate();
                                 this.saveToStorage();
                                 this.showToast('Synced with Sheet!');
                             }
@@ -328,6 +343,10 @@
                     } catch (err) {
                         console.log('Sync skipped or offline mode.');
                     }
+                },
+
+                sortExpensesByDate() {
+                    this.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
                 },
 
                 saveToStorage() {
@@ -363,7 +382,8 @@
                         date: this.form.date
                     };
 
-                    this.expenses.unshift(newEntry);
+                    this.expenses.push(newEntry);
+                    this.sortExpensesByDate();
                     this.saveToStorage();
                     this.closeAddModal();
                     this.showToast('Expense recorded successfully!');
@@ -382,6 +402,7 @@
                         { id: 103, description: 'Online Subscription', amount: 14.99, date: '2026-10-30T21:00' },
                         { id: 104, description: 'Coffee & Snack', amount: 12.50, date: '2026-09-15T14:00' }
                     ];
+                    this.sortExpensesByDate();
                     this.saveToStorage();
                     this.showToast('Sample data loaded!');
                 },
