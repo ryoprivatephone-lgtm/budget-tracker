@@ -318,23 +318,24 @@
                     }
                 },
 
-                async syncFromSheet() {
-                    if (!this.gasUrl) return;
-                    try {
-                        const res = await fetch(this.gasUrl);
-                        if (res.ok) {
-                            const fetchedExpenses = await res.json();
-                            if (Array.isArray(fetchedExpenses) && fetchedExpenses.length > 0) {
-                                this.expenses = fetchedExpenses;
-                                this.sortExpensesByDate();
-                                this.saveToStorage();
-                                this.showToast('Synced with Sheet!');
-                            }
+             // 2. Googleスプレッドシート（GAS）にも送信して記録する
+                    if (this.gasUrl) {
+                        try {
+                            await fetch(this.gasUrl, {
+                                method: 'POST',
+                                mode: 'no-cors', // ★ここを追加！CORSエラーを回避します
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    type: 'manual',
+                                    description: newEntry.description,
+                                    amount: newEntry.amount,
+                                    date: newEntry.date
+                                })
+                            });
+                        } catch (err) {
+                            console.log('Failed to sync manual entry to sheet:', err);
                         }
-                    } catch (err) {
-                        console.log('Sync skipped or offline mode.');
-                    }
-                },
+                    }  
 
                 sortExpensesByDate() {
                     this.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
