@@ -318,13 +318,12 @@
                     }
                 },
 
-             // 2. Googleスプレッドシート（GAS）にも送信して記録する
+   // 2. Googleスプレッドシート（GAS）にも送信して記録する
                     if (this.gasUrl) {
                         try {
                             await fetch(this.gasUrl, {
                                 method: 'POST',
-                                mode: 'no-cors', // ★ここを追加！CORSエラーを回避します
-                                headers: { 'Content-Type': 'application/json' },
+                                mode: 'no-cors', // CORSエラーを回避して送信
                                 body: JSON.stringify({
                                     type: 'manual',
                                     description: newEntry.description,
@@ -335,7 +334,7 @@
                         } catch (err) {
                             console.log('Failed to sync manual entry to sheet:', err);
                         }
-                    }  
+                    }
 
                 sortExpensesByDate() {
                     this.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
