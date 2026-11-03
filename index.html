@@ -134,7 +134,7 @@
                                 $
                             </div>
                             <div>
-                                <h4 class="text-sm font-semibold text-white line-clamp-1" x-text="item.description"></h4>
+                                <h4 class="text-sm font-semibold text-white line-clamp-1" x-text="item.deion"></h4>
                                 <span class="text-[11px] text-slate-400" x-text="formatDate(item.date)"></span>
                             </div>
                         </div>
@@ -158,7 +158,7 @@
             <!-- Search Field -->
             <div class="relative">
                 <i class="fa-solid fa-search absolute left-4 top-3.5 text-slate-500 text-xs"></i>
-                <input type="text" x-model="searchQuery" placeholder="Search description..." 
+                <input type="text" x-model="searchQuery" placeholder="Search deion..." 
                        class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
             </div>
 
@@ -275,255 +275,254 @@
         </button>
     </nav>
 
-    <script>
-        function expenseApp() {
-            return {
-                activeTab: 'overview',
-                showModal: false,
-                searchQuery: '',
-                toast: { show: false, message: '' },
-                
-                gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec', // 181行目付近：ここにGASのWebアプリURLを記述してください
+ <script>
+    function expenseApp() {
+        return {
+            activeTab: 'overview',
+            showModal: false,
+            searchQuery: '',
+            toast: { show: false, message: '' },
+            
+            gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec',
 
-                form: {
+            form: {
+                description: '',
+                amount: '',
+                date: new Date().toISOString().slice(0, 16)
+            },
+
+            expenses: [
+                { id: 1, description: 'Supermarket Grocery', amount: 85.80, date: '2026-11-02T14:30' },
+                { id: 2, description: 'Tim Hortons Coffee', amount: 4.85, date: '2026-11-01T08:15' },
+                { id: 3, description: 'Compass Pass Refill', amount: 120.00, date: '2026-10-15T09:00' },
+                { id: 4, description: 'Superstore Supplies', amount: 145.30, date: '2026-10-05T18:20' }
+            ],
+
+            init() {
+                const saved = localStorage.getItem('budget_tracker_expenses');
+                if (saved) {
+                    try { 
+                        this.expenses = JSON.parse(saved); 
+                        this.sortExpensesByDate();
+                    } catch (e) {}
+                }
+                this.registerServiceWorker();
+                this.syncFromSheet();
+            },
+
+            registerServiceWorker() {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('sw.js').catch(err => {
+                        console.log('SW registration skipped or failed');
+                    });
+                }
+            },
+
+            async syncFromSheet() {
+                if (!this.gasUrl) return;
+                try {
+                    const res = await fetch(this.gasUrl);
+                    if (res.ok) {
+                        const fetchedExpenses = await res.json();
+                        if (Array.isArray(fetchedExpenses) && fetchedExpenses.length > 0) {
+                            this.expenses = fetchedExpenses;
+                            this.sortExpensesByDate();
+                            this.saveToStorage();
+                            this.showToast('Synced with Sheet!');
+                        }
+                    }
+                } catch (err) {
+                    console.log('Sync skipped or offline mode.');
+                }
+            },
+
+            sortExpensesByDate() {
+                this.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            },
+
+            saveToStorage() {
+                localStorage.setItem('budget_tracker_expenses', JSON.stringify(this.expenses));
+            },
+
+            showToast(msg) {
+                this.toast.message = msg;
+                this.toast.show = true;
+                setTimeout(() => { this.toast.show = false; }, 2500);
+            },
+
+            openAddModal() {
+                this.form = {
                     description: '',
                     amount: '',
                     date: new Date().toISOString().slice(0, 16)
-                },
+                };
+                this.showModal = true;
+            },
 
-                expenses: [
-                    { id: 1, description: 'Supermarket Grocery', amount: 85.80, date: '2026-11-02T14:30' },
-                    { id: 2, description: 'Tim Hortons Coffee', amount: 4.85, date: '2026-11-01T08:15' },
-                    { id: 3, description: 'Compass Pass Refill', amount: 120.00, date: '2026-10-15T09:00' },
-                    { id: 4, description: 'Superstore Supplies', amount: 145.30, date: '2026-10-05T18:20' }
-                ],
+            closeAddModal() {
+                this.showModal = false;
+            },
 
-                init() {
-                    const saved = localStorage.getItem('budget_tracker_expenses');
-                    if (saved) {
-                        try { 
-                            this.expenses = JSON.parse(saved); 
-                            this.sortExpensesByDate();
-                        } catch (e) {}
-                    }
-                    this.registerServiceWorker();
-                    this.syncFromSheet();
-                },
+            saveExpense() {
+                if (!this.form.description || !this.form.amount) return;
+                
+                const newEntry = {
+                    id: Date.now(),
+                    description: this.form.description,
+                    amount: parseFloat(this.form.amount),
+                    date: this.form.date
+                };
 
-                registerServiceWorker() {
-                    if ('serviceWorker' in navigator) {
-                        navigator.serviceWorker.register('sw.js').catch(err => {
-                            console.log('SW registration skipped or failed');
+                // 1. ローカルに追加してUIを即座に更新
+                this.expenses.push(newEntry);
+                this.sortExpensesByDate();
+                this.saveToStorage();
+                this.closeAddModal();
+                this.showToast('Expense recorded successfully!');
+
+                // 2. GETパラメータでCORS制限を回送してGASへバックグラウンド送信
+                if (this.gasUrl) {
+                    try {
+                        const params = new URLSearchParams({
+                            type: 'manual',
+                            description: newEntry.description,
+                            amount: newEntry.amount,
+                            date: newEntry.date
                         });
+                        
+                        fetch(`${this.gasUrl}?${params.toString()}`, { mode: 'no-cors' });
+                    } catch (err) {
+                        console.log('Failed to sync manual entry to sheet:', err);
                     }
-                },
-
- // 2. Googleスプレッドシート（GAS）にも送信して記録する
-                    if (this.gasUrl) {
-                        try {
-                            const payload = JSON.stringify({
-                                type: 'manual',
-                                description: newEntry.description,
-                                amount: newEntry.amount,
-                                date: newEntry.date
-                            });
-                            
-                            // sendBeaconを使うことで、CORSエラーを出さずにバックグラウンドで送信できる
-                            navigator.sendBeacon(this.gasUrl, payload);
-                        } catch (err) {
-                            console.log('Failed to sync manual entry to sheet:', err);
-                        }
-                    }
-
-                sortExpensesByDate() {
-                    this.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
-                },
-
-                saveToStorage() {
-                    localStorage.setItem('budget_tracker_expenses', JSON.stringify(this.expenses));
-                },
-
-                showToast(msg) {
-                    this.toast.message = msg;
-                    this.toast.show = true;
-                    setTimeout(() => { this.toast.show = false; }, 2500);
-                },
-
-                openAddModal() {
-                    this.form = {
-                        description: '',
-                        amount: '',
-                        date: new Date().toISOString().slice(0, 16)
-                    };
-                    this.showModal = true;
-                },
-
-                closeAddModal() {
-                    this.showModal = false;
-                },
-
-            async saveExpense() {
-                    if (!this.form.description || !this.form.amount) return;
-                    
-                    const newEntry = {
-                        id: Date.now(),
-                        description: this.form.description,
-                        amount: parseFloat(this.form.amount),
-                        date: this.form.date
-                    };
-
-                    // 1. ローカルに追加して画面を更新
-                    this.expenses.push(newEntry);
-                    this.sortExpensesByDate();
-                    this.saveToStorage();
-                    this.closeAddModal();
-                    this.showToast('Expense recorded successfully!');
-
-                    // 2. Googleスプレッドシート（GAS）にも送信して記録する
-                    if (this.gasUrl) {
-                        try {
-                            await fetch(this.gasUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    type: 'manual',
-                                    description: newEntry.description,
-                                    amount: newEntry.amount,
-                                    date: newEntry.date
-                                })
-                            });
-                        } catch (err) {
-                            console.log('Failed to sync manual entry to sheet:', err);
-                        }
-                    }
-                },
-
-                deleteExpense(id) {
-                    this.expenses = this.expenses.filter(item => item.id !== id);
-                    this.saveToStorage();
-                    this.showToast('Transaction removed');
-                },
-
-                seedDemoData() {
-                    this.expenses = [
-                        { id: 101, description: 'Supermarket Grocery', amount: 64.20, date: '2026-11-02T16:00' },
-                        { id: 102, description: 'Gas Station Fuel', amount: 55.00, date: '2026-11-01T12:30' },
-                        { id: 103, description: 'Online Subscription', amount: 14.99, date: '2026-10-30T21:00' },
-                        { id: 104, description: 'Coffee & Snack', amount: 12.50, date: '2026-09-15T14:00' }
-                    ];
-                    this.sortExpensesByDate();
-                    this.saveToStorage();
-                    this.showToast('Sample data loaded!');
-                },
-
-                clearAllData() {
-                    this.expenses = [];
-                    this.saveToStorage();
-                    this.showToast('All transactions cleared');
-                },
-
-                exportCSV() {
-                    if (this.expenses.length === 0) {
-                        this.showToast('No data to export!');
-                        return;
-                    }
-                    let csv = '\uFEFFDate,Description,Amount\n';
-                    this.expenses.forEach(e => {
-                        csv += `"${e.date}","${e.description.replace(/"/g, '""')}",${e.amount}\n`;
-                    });
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', `Expenses_Export_${new Date().toISOString().slice(0, 10)}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    this.showToast('CSV downloaded successfully!');
-                },
-
-                formatCAD(val) {
-                    return '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                },
-
-                formatDate(dateStr) {
-                    if (!dateStr) return '';
-                    const d = new Date(dateStr);
-                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                },
-
-                get currentMonthLabel() {
-                    const now = new Date();
-                    return now.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
-                },
-
-                get currentMonthTotalCAD() {
-                    const now = new Date();
-                    const currentYearMonth = now.toISOString().slice(0, 7);
-                    return this.expenses
-                        .filter(item => item.date && item.date.startsWith(currentYearMonth))
-                        .reduce((sum, item) => sum + Number(item.amount), 0);
-                },
-
-                get currentMonthCADCount() {
-                    const now = new Date();
-                    const currentYearMonth = now.toISOString().slice(0, 7);
-                    return this.expenses.filter(item => item.date && item.date.startsWith(currentYearMonth)).length;
-                },
-
-                get monthlyStats() {
-                    const monthlyTotals = {};
-                    this.expenses.forEach(e => {
-                        if (!e.date) return;
-                        const ym = e.date.substring(0, 7);
-                        monthlyTotals[ym] = (monthlyTotals[ym] || 0) + Number(e.amount);
-                    });
-
-                    const sortedYM = Object.keys(monthlyTotals).sort();
-                    if (sortedYM.length === 0) {
-                        const nowYM = new Date().toISOString().slice(0, 7);
-                        return [{ yearMonth: nowYM, monthLabel: 'Current', total: 0, heightPercent: 0 }];
-                    }
-
-                    const totalsArray = sortedYM.map(ym => monthlyTotals[ym]);
-
-                    let scaleTarget = 1;
-                    if (totalsArray.length > 2) {
-                        const sortedTotals = [...totalsArray].sort((a, b) => a - b);
-                        const trimmed = sortedTotals.slice(1, -1);
-                        const avg = trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
-                        scaleTarget = avg || 1;
-                    } else {
-                        const avg = totalsArray.reduce((sum, val) => sum + val, 0) / totalsArray.length;
-                        scaleTarget = avg || 1;
-                    }
-
-                    return sortedYM.map(ym => {
-                        const dateParts = ym.split('-');
-                        const dateObj = new Date(dateParts[0], dateParts[1] - 1, 1);
-                        const monthLabel = dateObj.toLocaleDateString('en-US', { month: 'short' });
-                        const total = monthlyTotals[ym];
-                        return {
-                            yearMonth: ym,
-                            monthLabel: `${monthLabel} '${ym.slice(2, 4)}`,
-                            total: total,
-                            heightPercent: Math.min((total / scaleTarget) * 100, 100)
-                        };
-                    });
-                },
-
-                get filteredExpenses() {
-                    return this.expenses.filter(item => {
-                        if (this.searchQuery && !item.description.toLowerCase().includes(this.searchQuery.toLowerCase())) return false;
-                        return true;
-                    });
-                },
-
-                get recentExpenses() {
-                    return this.expenses.slice(0, 5);
                 }
+            },
+
+            deleteExpense(id) {
+                this.expenses = this.expenses.filter(item => item.id !== id);
+                this.saveToStorage();
+                this.showToast('Transaction removed');
+            },
+
+            seedDemoData() {
+                this.expenses = [
+                    { id: 101, description: 'Supermarket Grocery', amount: 64.20, date: '2026-11-02T16:00' },
+                    { id: 102, description: 'Gas Station Fuel', amount: 55.00, date: '2026-11-01T12:30' },
+                    { id: 103, description: 'Online Subscription', amount: 14.99, date: '2026-10-30T21:00' },
+                    { id: 104, description: 'Coffee & Snack', amount: 12.50, date: '2026-09-15T14:00' }
+                ];
+                this.sortExpensesByDate();
+                this.saveToStorage();
+                this.showToast('Sample data loaded!');
+            },
+
+            clearAllData() {
+                this.expenses = [];
+                this.saveToStorage();
+                this.showToast('All transactions cleared');
+            },
+
+            exportCSV() {
+                if (this.expenses.length === 0) {
+                    this.showToast('No data to export!');
+                    return;
+                }
+                let csv = '\uFEFFDate,Description,Amount\n';
+                this.expenses.forEach(e => {
+                    csv += `"${e.date}","${e.description.replace(/"/g, '""')}",${e.amount}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `Expenses_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                this.showToast('CSV downloaded successfully!');
+            },
+
+            formatCAD(val) {
+                return '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            },
+
+            formatDate(dateStr) {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            },
+
+            get currentMonthLabel() {
+                const now = new Date();
+                return now.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+            },
+
+            get currentMonthTotalCAD() {
+                const now = new Date();
+                const currentYearMonth = now.toISOString().slice(0, 7);
+                return this.expenses
+                    .filter(item => item.date && item.date.startsWith(currentYearMonth))
+                    .reduce((sum, item) => sum + Number(item.amount), 0);
+            },
+
+            get currentMonthCADCount() {
+                const now = new Date();
+                const currentYearMonth = now.toISOString().slice(0, 7);
+                return this.expenses.filter(item => item.date && item.date.startsWith(currentYearMonth)).length;
+            },
+
+            get monthlyStats() {
+                const monthlyTotals = {};
+                this.expenses.forEach(e => {
+                    if (!e.date) return;
+                    const ym = e.date.substring(0, 7);
+                    monthlyTotals[ym] = (monthlyTotals[ym] || 0) + Number(e.amount);
+                });
+
+                const sortedYM = Object.keys(monthlyTotals).sort();
+                if (sortedYM.length === 0) {
+                    const nowYM = new Date().toISOString().slice(0, 7);
+                    return [{ yearMonth: nowYM, monthLabel: 'Current', total: 0, heightPercent: 0 }];
+                }
+
+                const totalsArray = sortedYM.map(ym => monthlyTotals[ym]);
+
+                let scaleTarget = 1;
+                if (totalsArray.length > 2) {
+                    const sortedTotals = [...totalsArray].sort((a, b) => a - b);
+                    const trimmed = sortedTotals.slice(1, -1);
+                    const avg = trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
+                    scaleTarget = avg || 1;
+                } else {
+                    const avg = totalsArray.reduce((sum, val) => sum + val, 0) / totalsArray.length;
+                    scaleTarget = avg || 1;
+                }
+
+                return sortedYM.map(ym => {
+                    const dateParts = ym.split('-');
+                    const dateObj = new Date(dateParts[0], dateParts[1] - 1, 1);
+                    const monthLabel = dateObj.toLocaleDateString('en-US', { month: 'short' });
+                    const total = monthlyTotals[ym];
+                    return {
+                        yearMonth: ym,
+                        monthLabel: `${monthLabel} '${ym.slice(2, 4)}`,
+                        total: total,
+                        heightPercent: Math.min((total / scaleTarget) * 100, 100)
+                    };
+                });
+            },
+
+            get filteredExpenses() {
+                return this.expenses.filter(item => {
+                    if (this.searchQuery && !item.description.toLowerCase().includes(this.searchQuery.toLowerCase())) return false;
+                    return true;
+                });
+            },
+
+            get recentExpenses() {
+                return this.expenses.slice(0, 5);
             }
         }
-    </script>
+    }
+</script>
 </body>
 </html>
