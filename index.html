@@ -318,19 +318,18 @@
                     }
                 },
 
-   // 2. Googleスプレッドシート（GAS）にも送信して記録する
+ // 2. Googleスプレッドシート（GAS）にも送信して記録する
                     if (this.gasUrl) {
                         try {
-                            await fetch(this.gasUrl, {
-                                method: 'POST',
-                                mode: 'no-cors', // CORSエラーを回避して送信
-                                body: JSON.stringify({
-                                    type: 'manual',
-                                    description: newEntry.description,
-                                    amount: newEntry.amount,
-                                    date: newEntry.date
-                                })
+                            const payload = JSON.stringify({
+                                type: 'manual',
+                                description: newEntry.description,
+                                amount: newEntry.amount,
+                                date: newEntry.date
                             });
+                            
+                            // sendBeaconを使うことで、CORSエラーを出さずにバックグラウンドで送信できる
+                            navigator.sendBeacon(this.gasUrl, payload);
                         } catch (err) {
                             console.log('Failed to sync manual entry to sheet:', err);
                         }
