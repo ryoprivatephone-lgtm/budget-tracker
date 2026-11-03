@@ -363,7 +363,7 @@
                     this.showModal = false;
                 },
 
-                saveExpense() {
+            async saveExpense() {
                     if (!this.form.description || !this.form.amount) return;
                     
                     const newEntry = {
@@ -373,11 +373,30 @@
                         date: this.form.date
                     };
 
+                    // 1. ローカルに追加して画面を更新
                     this.expenses.push(newEntry);
                     this.sortExpensesByDate();
                     this.saveToStorage();
                     this.closeAddModal();
                     this.showToast('Expense recorded successfully!');
+
+                    // 2. Googleスプレッドシート（GAS）にも送信して記録する
+                    if (this.gasUrl) {
+                        try {
+                            await fetch(this.gasUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    type: 'manual',
+                                    description: newEntry.description,
+                                    amount: newEntry.amount,
+                                    date: newEntry.date
+                                })
+                            });
+                        } catch (err) {
+                            console.log('Failed to sync manual entry to sheet:', err);
+                        }
+                    }
                 },
 
                 deleteExpense(id) {
