@@ -257,29 +257,20 @@
         <span x-text="toast.message"></span>
     </div>
 
-    <!-- Large Mobile Navigation Bar -->
+    <!-- Large Mobile Navigation Bar (Clean FontAwesome Icons Only) -->
     <nav class="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 px-4 pt-3 pb-7 flex justify-around items-center z-30 shadow-2xl">
         <button @click="activeTab = 'overview'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'overview' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
-            <div class="flex items-center space-x-1.5 text-lg">
-                <i class="fa-solid fa-chart-pie"></i>
-                <span class="text-xs">📊</span>
-            </div>
+            <i class="fa-solid fa-chart-pie text-lg"></i>
             <span class="text-xs">Overview</span>
         </button>
 
         <button @click="activeTab = 'expenses'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'expenses' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
-            <div class="flex items-center space-x-1.5 text-lg">
-                <i class="fa-solid fa-wallet"></i>
-                <span class="text-xs">💳</span>
-            </div>
+            <i class="fa-solid fa-wallet text-lg"></i>
             <span class="text-xs">Expenses</span>
         </button>
 
         <button @click="activeTab = 'settings'" class="flex-1 py-2 flex flex-col items-center justify-center space-y-1.5 transition-all rounded-2xl active:scale-95" :class="activeTab === 'settings' ? 'text-emerald-400 bg-emerald-500/10 font-bold' : 'text-slate-400 hover:text-slate-200'">
-            <div class="flex items-center space-x-1.5 text-lg">
-                <i class="fa-solid fa-gear"></i>
-                <span class="text-xs">⚙️</span>
-            </div>
+            <i class="fa-solid fa-gear text-lg"></i>
             <span class="text-xs">Settings</span>
         </button>
     </nav>
@@ -292,7 +283,7 @@
                 searchQuery: '',
                 toast: { show: false, message: '' },
                 
-                gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec',
+                gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec', // 181行目付近：ここにGASのWebアプリURLを記述してください
 
                 form: {
                     description: '',
