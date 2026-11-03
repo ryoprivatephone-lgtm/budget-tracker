@@ -1,15 +1,26 @@
+const CACHE_NAME = 'budget-tracker-v1';
+
+// インストール処理
+self.addEventListener('install', event => {
+  self.skipWaiting();
+});
+
+// アクティベート処理
+self.addEventListener('activate', event => {
+  event.waitUntil(clients.claim());
+});
+
+// 通信（fetch）の割り込み処理
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  
-  // GAS（script.google.com）への通信はService Workerでインターセプトせずそのまま通す
+
+  // Google Apps Script（script.google.com）への通信は、Service Workerで横取りせず直接ネットワークへ流す
   if (url.hostname.includes('script.google.com')) {
     return;
   }
 
-  // その他のPWA用キャッシュ処理（従来のコード）
+  // それ以外のファイル（HTMLやアイコン等）の読み込み処理
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
