@@ -285,13 +285,30 @@
             
             gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec',
 
-           openAddModal() {
-                this.form = {
-                    description: '',
-                    amount: '',
-                    date: new Date().toISOString().slice(0, 16)
-                };
-                this.showModal = true;
+// バンクーバー時間のローカル現在日時を YYYY-MM-DDTHH:mm 形式で取得する関数
+            getVancouverLocalDateTime() {
+                const now = new Date();
+                const offset = now.getTimezoneOffset() * 60000;
+                // ※もしブラウザのタイムゾーン設定自体がすでにバンクーバー時間であればローカル時間でそのまま取得できますが、
+                // 確実にバンクーバー時間（America/Vancouver）の現在時刻を生成するには以下のIntl形式が確実です。
+                const formatter = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'America/Vancouver',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+                const parts = formatter.formatToParts(now);
+                const getPart = (type) => parts.find(p => p.type === type).value;
+                return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
+            },
+            
+    form: {
+                description: '',
+                amount: '',
+                date: '' // init()かopenAddModalでセットされます
             },
 
             expenses: [
@@ -353,11 +370,11 @@
                 setTimeout(() => { this.toast.show = false; }, 2500);
             },
 
-            openAddModal() {
+          openAddModal() {
                 this.form = {
                     description: '',
                     amount: '',
-                    date: new Date().toISOString().slice(0, 16)
+                    date: this.getVancouverLocalDateTime()
                 };
                 this.showModal = true;
             },
