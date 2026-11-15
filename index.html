@@ -285,10 +285,13 @@
             
             gasUrl: 'https://script.google.com/macros/s/AKfycbygfPhC49Hs5NEdWoKRS0Br9RjcCjllsdVJn9gpgecz8VPHY45CkcbmQIOLNg0NxKU/exec',
 
-            form: {
-                description: '',
-                amount: '',
-                date: new Date().toISOString().slice(0, 16)
+           openAddModal() {
+                this.form = {
+                    description: '',
+                    amount: '',
+                    date: new Date().toISOString().slice(0, 16)
+                };
+                this.showModal = true;
             },
 
             expenses: [
